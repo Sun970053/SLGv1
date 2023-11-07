@@ -86,7 +86,6 @@ void vTask_SLG_Data_Collection(void * pvParameters)
         if(status == SLG_HK_Rec_All && slg_hk_a.checker == slg_hk_b.checker)
         {
             /* Copy Port A and Port B data to packet */
-            EXTERNAL_RTC_GetTime(&second);
             memcpy(&slg_pkt.header.fileindex, &filenum, 4);
             memcpy(&slg_pkt.header.sequence,  &seqnum,  4);  seqnum++;
             memcpy(&slg_pkt.header.time,      &second,  4);
