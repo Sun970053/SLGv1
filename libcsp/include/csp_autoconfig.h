@@ -16,7 +16,7 @@
 #define CSP_DEBUG 1
 #define CSP_VERBOSE 1
 /* #undef CSP_USE_RDP */
-/* #undef CSP_USE_CRC32 */
+#define CSP_USE_CRC32 1
 /* #undef CSP_USE_HMAC */
 /* #undef CSP_USE_XTEA */
 /* #undef CSP_USE_PROMISC */

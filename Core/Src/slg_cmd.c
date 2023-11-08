@@ -5,10 +5,10 @@
  *      Author: spacelab-cute-PC
  */
 
-#include "slg.h"
+#include "slg_task.h"
 
 extern I2C_HandleTypeDef hi2c1;
-
+TaskHandle_t xTaskHandle_SLG_RECEIVING;
 /* Initialize SLG parameters. */
 /* The default parameters loaded onto SLG upon bootup are also listed */
 slg_param_t init_slg_param(void)
@@ -176,11 +176,6 @@ slg_whitelist_t init_slg_whitelist(void)
 /* SLG interaction command line */
 int cmd_slg_handle(int argc, char **argv)
 {
-	if(argc < 2)
-	{
-		printf(cmd_slg.helpmsg);
-		return CMD_FAIL;
-	}
 	int ret = 0;
 	uint8_t ucPort = strtoul(argv[1], 0, 0);
 	slg_hk_a_s slg_hk_a;
@@ -203,7 +198,6 @@ int cmd_slg_handle(int argc, char **argv)
 			if(xTaskCreate(vTask_SLG_Data_Collection, "SLG_DATA_RX", 4096 / sizeof( portSTACK_TYPE ), (void*)&params, TASK_PRIORITY_SLG_RECEIVING, &xTaskHandle_SLG_RECEIVING) != pdTRUE)
 				printf("Fail to create SLG data receiving task!\r\n");
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_START, SLG_TIMEOUT, NULL, 0, NULL, 0);
-			break;
 			break;
 		}
 		case SLG_PORT_STOP:

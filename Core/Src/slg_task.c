@@ -7,6 +7,10 @@
 
 #include "slg_task.h"
 
+#define INFO_PRINTF	1
+
+extern TaskHandle_t xTaskHandle_SLG_RECEIVING;
+
 volatile uint8_t status = SLG_HK_Rec_None;
 volatile int fhandle = 0xFF;
 csp_socket_t sock = {0};
@@ -14,6 +18,8 @@ csp_conn_t *conn;
 
 void vTask_SLG_Data_Collection(void * pvParameters)
 {
+	int cspret;
+	int filenum = 0;
 	status = SLG_HK_Rec_None;
 	volatile uint32_t exectime = *((uint32_t*)pvParameters);
     uint32_t seqnum = 0;
@@ -54,7 +60,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
 			switch (csp_conn_dport(conn))
             {
                 case SLG_DATA_A:
-					#ifdef INFO_printf
+					#ifdef INFO_PRINTF
                 	printf("[SLG] packet part A received\n");
 					#endif
                     memcpy(&slg_hk_a.time, packet->data, packet->length);
@@ -73,7 +79,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
                     status |= SLG_HK_Rec_A;
                     break;
                 case SLG_DATA_B:
-					#ifdef INFO_printf
+					#ifdef INFO_PRINTF
                 	printf("[SLG] packet part B received\n");
 					#endif
                 	memset(&slg_hk_b.rx_b, 0, sizeof(slg_hk_b_s));
@@ -122,7 +128,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
     }
 
     fhandle = 0xFF;
-	#ifdef INFO_printf
+	#ifdef INFO_PRINTF
     printf("[SLG] LoRa packet receive task off\n");
 	#endif
     cspret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);

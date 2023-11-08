@@ -101,10 +101,9 @@ void BlueLEDTask(void* pvParameter)
 {
 	while(1)
 	{
-		printf("Hi BlueLEDTask\r\n");
 		HAL_GPIO_TogglePin(LD6_GPIO_Port, LD6_Pin);
 		HAL_GPIO_TogglePin(LD4_GPIO_Port, LD4_Pin);
-		vTaskDelay(2000);
+		vTaskDelay(5000);
 	}
 }
 
@@ -112,10 +111,9 @@ void RedLEDTask(void* pvParameter)
 {
 	while(1)
 	{
-		printf("Hi RedLEDTask\r\n");
 		HAL_GPIO_TogglePin(LD5_GPIO_Port, LD5_Pin);
 		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		vTaskDelay(2500);
+		vTaskDelay(10000);
 	}
 }
 
