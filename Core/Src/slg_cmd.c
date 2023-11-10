@@ -7,8 +7,7 @@
 
 #include "slg_task.h"
 
-extern I2C_HandleTypeDef hi2c1;
-TaskHandle_t xTaskHandle_SLG_RECEIVING;
+extern TaskHandle_t xTaskHandle_SLG_RECEIVING;
 /* Initialize SLG parameters. */
 /* The default parameters loaded onto SLG upon bootup are also listed */
 slg_param_t init_slg_param(void)
@@ -174,10 +173,10 @@ slg_whitelist_t init_slg_whitelist(void)
 }
 
 /* SLG interaction command line */
-int cmd_slg_handle(int argc, char **argv)
+int cmd_slg_handle(int cmdValue)
 {
 	int ret = 0;
-	uint8_t ucPort = strtoul(argv[1], 0, 0);
+	uint8_t ucPort = cmdValue;
 	slg_hk_a_s slg_hk_a;
 	slg_hk_b_s slg_hk_b;
 	uint32_t params;
@@ -187,24 +186,27 @@ int cmd_slg_handle(int argc, char **argv)
 		case SLG_PORT_PING:
 		{
 			ret = csp_ping(CSP_SLG_ADD, SLG_TIMEOUT, 1, CSP_O_NONE);
+			if(ret) printf("SLG_PORT_PING: \'%d\' ---> success\r\n", SLG_PORT_PING);
 			break;
 		}
 		case SLG_PORT_START:
 		{
-			if(argc == 3)
-				params = strtoul(argv[2], 0, 0);
-			else
-				params = 100;
+			params = 100;
 			if(xTaskCreate(vTask_SLG_Data_Collection, "SLG_DATA_RX", 4096 / sizeof( portSTACK_TYPE ), (void*)&params, TASK_PRIORITY_SLG_RECEIVING, &xTaskHandle_SLG_RECEIVING) != pdTRUE)
 				printf("Fail to create SLG data receiving task!\r\n");
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_START, SLG_TIMEOUT, NULL, 0, NULL, 0);
+			if(ret) printf("SLG_PORT_START: \'%d\' ---> success\r\n", SLG_PORT_START);
 			break;
 		}
 		case SLG_PORT_STOP:
 		{
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
+			if(ret) printf("SLG_PORT_STOP: \'%d\' ---> success\r\n", SLG_PORT_STOP);
+
 			vTaskDelay(500);
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
+			if(ret) printf("SLG_PORT_STOP: \'%d\' ---> success\r\n", SLG_PORT_STOP);
+
 			if(xTaskHandle_SLG_RECEIVING != NULL)
 			{
 				vTaskDelete(xTaskHandle_SLG_RECEIVING);
@@ -218,6 +220,7 @@ int cmd_slg_handle(int argc, char **argv)
 			slg_param_t slg_param = init_slg_param();
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_SYNC_PARAMS,
 					SLG_TIMEOUT, &slg_param.epoch, sizeof(slg_param_t), NULL, 0);
+			if(ret) printf("SLG_PORT_SYNC_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_SYNC_PARAMS);
 			break;
 		}
 		case SLG_PORT_SYNC_REGIONAL_PARAMS:
@@ -225,6 +228,7 @@ int cmd_slg_handle(int argc, char **argv)
 			slg_region_param_t slg_region_param = init_slg_region_param();
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_SYNC_REGIONAL_PARAMS,
 					SLG_TIMEOUT, &slg_region_param.lorawan_public, sizeof(slg_region_param_t), NULL, 0);
+			if(ret) printf("SLG_PORT_SYNC_REGIONAL_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_SYNC_REGIONAL_PARAMS);
 			break;
 		}
 		case SLG_PORT_SYNC_WHITELIST:
@@ -232,12 +236,15 @@ int cmd_slg_handle(int argc, char **argv)
 			slg_whitelist_t slg_whitelist = init_slg_whitelist();
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_SYNC_WHITELIST,
 					SLG_TIMEOUT, &slg_whitelist.address[0], sizeof(slg_whitelist_t), NULL, 0);
+			if(ret) printf("SLG_PORT_SYNC_WHITELIST: \'%d\' ---> success\r\n", SLG_PORT_SYNC_WHITELIST);
 			break;
 		}
 		case SLG_PORT_PRINT_PARAMS:
 		{
 			slg_param_t slg_param;
-			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_PARAMS, SLG_TIMEOUT, NULL, 0, &slg_param.epoch, sizeof(slg_param_t));
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_PARAMS, SLG_TIMEOUT, NULL, 0,
+					&slg_param.epoch, sizeof(slg_param_t));
+			if(ret) printf("SLG_PORT_PRINT_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_PRINT_PARAMS);
 			slg_param.epoch = csp_ntoh32(slg_param.epoch);
 			slg_param.mac_msb = csp_ntoh32(slg_param.mac_msb);
 			slg_param.mac_lsb = csp_ntoh32(slg_param.mac_lsb);
@@ -268,21 +275,143 @@ int cmd_slg_handle(int argc, char **argv)
 		}
 		case SLG_PORT_PRINT_REGIONAL_PARAMS:
 		{
+			slg_region_param_t slg_region_param;
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_REGIONAL_PARAMS, SLG_TIMEOUT, NULL, 0,
+					&slg_region_param.lorawan_public, sizeof(slg_region_param_t));
+			if(ret) printf("SLG_PORT_PRINT_REGIONAL_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_PRINT_REGIONAL_PARAMS);
+			slg_region_param.radio_freq[0] = csp_ntoh32(slg_region_param.radio_freq[0]);
+			slg_region_param.radio_freq[1] = csp_ntoh32(slg_region_param.radio_freq[1]);
+			slg_region_param.radio_rssi_offset[0] = csp_ntoh16(slg_region_param.radio_rssi_offset[0]);
+			slg_region_param.radio_rssi_offset[1] = csp_ntoh16(slg_region_param.radio_rssi_offset[1]);
+			slg_region_param.chan_multi_if[0] = csp_ntoh32(slg_region_param.chan_multi_if[0]);
+			slg_region_param.chan_multi_if[1] = csp_ntoh32(slg_region_param.chan_multi_if[1]);
+			slg_region_param.chan_multi_if[2] = csp_ntoh32(slg_region_param.chan_multi_if[2]);
+			slg_region_param.chan_multi_if[3] = csp_ntoh32(slg_region_param.chan_multi_if[3]);
+			slg_region_param.chan_multi_if[4] = csp_ntoh32(slg_region_param.chan_multi_if[4]);
+			slg_region_param.chan_multi_if[5] = csp_ntoh32(slg_region_param.chan_multi_if[5]);
+			slg_region_param.chan_multi_if[6] = csp_ntoh32(slg_region_param.chan_multi_if[6]);
+			slg_region_param.chan_multi_if[7] = csp_ntoh32(slg_region_param.chan_multi_if[7]);
+			slg_region_param.chan_std_if = csp_ntoh32(slg_region_param.chan_std_if);
+			slg_region_param.chan_FSK_if = csp_ntoh32(slg_region_param.chan_FSK_if);
+			slg_region_param.chan_FSK_dr = csp_ntoh32(slg_region_param.chan_FSK_dr);
+
+			printf("lorawan public:    %d\r\n", slg_region_param.lorawan_public);
+			printf("clksrc:            %d\r\n", slg_region_param.clksrc);
+			printf("radio enable:      %d, %d\r\n", slg_region_param.radio_enable[0], slg_region_param.radio_enable[1]);
+			printf("radio type:        %d, %d\r\n", slg_region_param.radio_type[0], slg_region_param.radio_type[1]);
+			printf("radio freq:        %ld, %ld\r\n", (long int)slg_region_param.radio_freq[0], (long int)slg_region_param.radio_freq[1]);
+			printf("radio rssi offset: %ld, %ld\r\n", (long int)slg_region_param.radio_rssi_offset[0], (long int)slg_region_param.radio_rssi_offset[1]);
+			printf("radio tx enable:   %d, %d\r\n", slg_region_param.radio_tx_enable[0], slg_region_param.radio_tx_enable[1]);
+			printf("chan multi enable: %d, %d, %d, %d, %d, %d, %d, %d\r\n", slg_region_param.chan_multi_enable[0], slg_region_param.chan_multi_enable[1], slg_region_param.chan_multi_enable[2], slg_region_param.chan_multi_enable[3], slg_region_param.chan_multi_enable[4], slg_region_param.chan_multi_enable[5], slg_region_param.chan_multi_enable[6], slg_region_param.chan_multi_enable[7]);
+			printf("chan multi radio:  %d, %d, %d, %d, %d, %d, %d, %d\r\n", slg_region_param.chan_multi_radio[0], slg_region_param.chan_multi_radio[1], slg_region_param.chan_multi_radio[2], slg_region_param.chan_multi_radio[3], slg_region_param.chan_multi_radio[4], slg_region_param.chan_multi_radio[5], slg_region_param.chan_multi_radio[6], slg_region_param.chan_multi_radio[7]);
+			printf("chan multi if:     %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\r\n", slg_region_param.chan_multi_if[0], slg_region_param.chan_multi_if[1], slg_region_param.chan_multi_if[2], slg_region_param.chan_multi_if[3], slg_region_param.chan_multi_if[4], slg_region_param.chan_multi_if[5], slg_region_param.chan_multi_if[6], slg_region_param.chan_multi_if[7]);
+			printf("chan std enable:   %d\r\n", slg_region_param.chan_std_enable);
+			printf("chan std radio:    %d\r\n", slg_region_param.chan_std_radio);
+			printf("chan std if:       %ld\r\n", slg_region_param.chan_std_if);
+			printf("chan std bw:       %d\r\n", slg_region_param.chan_std_bw);
+			printf("chan std sf:       %d\r\n", slg_region_param.chan_std_sf);
+			printf("chan FSK enable:   %d\r\n", slg_region_param.chan_FSK_enable);
+			printf("chan FSK radio:    %d\r\n", slg_region_param.chan_FSK_radio);
+			printf("chan FSK if:       %ld\r\n", slg_region_param.chan_FSK_if);
+			printf("chan FSK bw:       %d\r\n", slg_region_param.chan_FSK_bw);
+			printf("chan FSK dr:       %ld\r\n", slg_region_param.chan_FSK_dr);
 			break;
 		}
 		case SLG_PORT_PRINT_WHITELIST:
 		{
+			slg_whitelist_t slg_whitelist;
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_REGIONAL_PARAMS, SLG_TIMEOUT, NULL, 0,
+					&slg_whitelist.address[0], sizeof(slg_whitelist));
+			if(ret) printf("SLG_PORT_PRINT_WHITELIST: \'%d\' ---> success\r\n", SLG_PORT_PRINT_WHITELIST);
+			slg_whitelist.address[0] = csp_ntoh32(slg_whitelist.address[0]);
+			slg_whitelist.address[1] = csp_ntoh32(slg_whitelist.address[1]);
+			slg_whitelist.address[2] = csp_ntoh32(slg_whitelist.address[2]);
+			slg_whitelist.address[3] = csp_ntoh32(slg_whitelist.address[3]);
+
+			printf("address 0: %x\r\n", (unsigned int)slg_whitelist.address[0]);
+			printf("address 1: %x\r\n", (unsigned int)slg_whitelist.address[1]);
+			printf("address 2: %x\r\n", (unsigned int)slg_whitelist.address[2]);
+			printf("address 3: %x\r\n", (unsigned int)slg_whitelist.address[3]);
+			printf("address 4: %x\r\n", (unsigned int)slg_whitelist.address[4]);
+			printf("address 5: %x\r\n", (unsigned int)slg_whitelist.address[5]);
+			printf("address 6: %x\r\n", (unsigned int)slg_whitelist.address[6]);
+			printf("address 7: %x\r\n", (unsigned int)slg_whitelist.address[7]);
+			printf("address 8: %x\r\n", (unsigned int)slg_whitelist.address[8]);
+			printf("address 9: %x\r\n", (unsigned int)slg_whitelist.address[9]);
+			printf("count:     %d\r\n", (unsigned int)slg_whitelist.count);
 			break;
 		}
 		case SLG_PORT_PRINT_HOUSEKEEPING_A:
 		{
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_HOUSEKEEPING_A, SLG_TIMEOUT, NULL, 0,
+								&slg_hk_a.time, sizeof(slg_hk_a_s));
+			if(ret) printf("SLG_PORT_PRINT_HOUSEKEEPING_A: \'%d\' ---> success\r\n", SLG_PORT_PRINT_HOUSEKEEPING_A);
+			slg_hk_a.time = csp_ntoh32(slg_hk_a.time);
+			slg_hk_a.count = csp_ntoh32(slg_hk_a.count);
+			slg_hk_a.rx_a.freq_hz = csp_ntoh32(slg_hk_a.rx_a.freq_hz);
+			slg_hk_a.rx_a.if_chain = csp_ntoh32(slg_hk_a.rx_a.if_chain);
+			slg_hk_a.rx_a.status = csp_ntoh32(slg_hk_a.rx_a.status);
+			slg_hk_a.rx_a.count_us = csp_ntoh32(slg_hk_a.rx_a.count_us);
+			slg_hk_a.rx_a.rf_chain = csp_ntoh32(slg_hk_a.rx_a.rf_chain);
+			slg_hk_a.rx_a.modulation = csp_ntoh32(slg_hk_a.rx_a.modulation);
+			slg_hk_a.rx_a.bandwidth = csp_ntoh32(slg_hk_a.rx_a.bandwidth);
+			slg_hk_a.rx_a.datarate = csp_ntoh32(slg_hk_a.rx_a.datarate);
+			slg_hk_a.rx_a.coderate = csp_ntoh32(slg_hk_a.rx_a.coderate);
+			slg_hk_a.rx_a.rssi = csp_ntoh32(slg_hk_a.rx_a.rssi);
+			slg_hk_a.rx_a.snr = csp_ntoh32(slg_hk_a.rx_a.snr);
+			slg_hk_a.rx_a.snr_min = csp_ntoh32(slg_hk_a.rx_a.snr_min);
+			slg_hk_a.rx_a.snr_max = csp_ntoh32(slg_hk_a.rx_a.snr_max);
+			slg_hk_a.rx_a.crc = csp_ntoh32(slg_hk_a.rx_a.crc);
+			slg_hk_a.rx_a.size = csp_ntoh32(slg_hk_a.rx_a.size);
+			slg_hk_a.rx_a.mhdr = csp_ntoh32(slg_hk_a.rx_a.mhdr);
+			slg_hk_a.rx_a.devaddr[0] = csp_ntoh32(slg_hk_a.rx_a.devaddr[0]);
+			slg_hk_a.rx_a.devaddr[1] = csp_ntoh32(slg_hk_a.rx_a.devaddr[1]);
+			slg_hk_a.rx_a.devaddr[2] = csp_ntoh32(slg_hk_a.rx_a.devaddr[2]);
+			slg_hk_a.rx_a.devaddr[3] = csp_ntoh32(slg_hk_a.rx_a.devaddr[3]);
+			slg_hk_a.rx_a.fctrl = csp_ntoh32(slg_hk_a.rx_a.fctrl);
+			slg_hk_a.rx_a.fcnt[0] = csp_ntoh32(slg_hk_a.rx_a.fcnt[0]);
+			slg_hk_a.rx_a.fcnt[1] = csp_ntoh32(slg_hk_a.rx_a.fcnt[1]);
+			slg_hk_a.checker = csp_ntoh32(slg_hk_a.checker);
+
+			printf("time:       %ld\r\n", (long int)slg_hk_a.time);
+			printf("count:      %ld\r\n", (long int)slg_hk_a.count);
+			printf("freq_hz:    %ld\r\n", (long int)slg_hk_a.rx_a.freq_hz);
+			printf("if_chain:   %d\r\n", slg_hk_a.rx_a.if_chain);
+			printf("status:     %d\r\n", slg_hk_a.rx_a.status);
+			printf("count_us:   %ld\r\n", (long int)slg_hk_a.rx_a.count_us);
+			printf("rf_chain:   %d\r\n", slg_hk_a.rx_a.rf_chain);
+			printf("modulation: %d\r\n", slg_hk_a.rx_a.modulation);
+			printf("bandwidth:  %d\r\n", slg_hk_a.rx_a.bandwidth);
+			printf("datarate:   %ld\r\n", (long int)slg_hk_a.rx_a.datarate);
+			printf("coderate:   %d\r\n", slg_hk_a.rx_a.coderate);
+			printf("rssi:       %ld\r\n", (long int)slg_hk_a.rx_a.rssi);
+			printf("snr:        %ld\r\n", (long int)slg_hk_a.rx_a.snr);
+			printf("snr_min:    %ld\r\n", (long int)slg_hk_a.rx_a.snr_min);
+			printf("snr_max:    %ld\r\n", (long int)slg_hk_a.rx_a.snr_max);
+			printf("crc:        %d\r\n", slg_hk_a.rx_a.crc);
+			printf("size:       %d\r\n", slg_hk_a.rx_a.size);
+			printf("mhdr:       %d\r\n", slg_hk_a.rx_a.mhdr);
+			printf("devaddr:    %d, %d, %d, %d\r\n", slg_hk_a.rx_a.devaddr[0], slg_hk_a.rx_a.devaddr[1], slg_hk_a.rx_a.devaddr[2], slg_hk_a.rx_a.devaddr[3]);
+			printf("fctrl:      %d\r\n", slg_hk_a.rx_a.fctrl);
+			printf("fcnt:       %d, %d\r\n", slg_hk_a.rx_a.fcnt[0], slg_hk_a.rx_a.fcnt[1]);
+			printf("checker:    %d\r\n", slg_hk_a.checker);
 			break;
 		}
 		case SLG_PORT_PRINT_HOUSEKEEPING_B:
 		{
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_PRINT_HOUSEKEEPING_B, SLG_TIMEOUT, NULL, 0,
+											&slg_hk_b.rx_b.payload[0], sizeof(slg_hk_b_s));
+			if(ret) printf("SLG_PORT_PRINT_HOUSEKEEPING_B: \'%d\' ---> success\r\n", SLG_PORT_PRINT_HOUSEKEEPING_B);
+			for(int i = 0;i < 248;i++)
+			{
+				printf("%02x ", slg_hk_b.rx_b.payload[i]);
+				if(i%16 == 15) printf("\r\n");
+			}
+			printf("checker:    %d\r\n", slg_hk_a.checker);
 			break;
 		}
 
 	}
+	return 0;
 }
 

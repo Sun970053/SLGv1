@@ -28,7 +28,7 @@
 #define SLG_GET_WHITELIST_RET_LEN  44
 #define SLG_SF_QUEUE_MAX   60
 
-#define SLG_TIMEOUT						1000 //1 sec timeout
+#define SLG_TIMEOUT						2000 //1 sec timeout
 
 #define CSP_SLG_ADD						6
 #define CSP_DB_ADD						7 //TODO
@@ -282,7 +282,7 @@ slg_tx_param_t init_slg_tx_param(void);
 slg_whitelist_t init_slg_whitelist(void);
 
 /* SLG interaction command line */
-int cmd_slg_handle(int, char **);
+int cmd_slg_handle(int);
 
 void vTask_SLG_Data_Collection(void* pvParameter);
 

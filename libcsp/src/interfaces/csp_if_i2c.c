@@ -6,13 +6,13 @@
 
 #define CSP_TIMEOUT 1000
 
-I2C_HandleTypeDef* SLG_i2c;
+extern I2C_HandleTypeDef hi2c1;
 
-csp_i2c_driver_tx_t csp_i2c_driver_tx(void * driver_data, csp_packet_t * frame)
+int csp_i2c_driver_tx(void * driver_data, csp_packet_t * frame)
 {
 	/*HAL_StatusTypeDef HAL_I2C_Master_Transmit(I2C_HandleTypeDef *hi2c, uint16_t DevAddress,
 												uint8_t *pData, uint16_t Size, uint32_t Timeout)*/
-	HAL_I2C_Master_Transmit(SLG_i2c, frame->cfpid, frame->frame_begin, frame->frame_length, CSP_TIMEOUT);
+	HAL_I2C_Master_Transmit(&hi2c1, frame->cfpid, frame->frame_begin, frame->frame_length, CSP_TIMEOUT);
 
 	csp_buffer_free(frame);
 	return CSP_ERR_NONE;
@@ -36,11 +36,12 @@ int csp_i2c_tx(csp_iface_t * iface, uint16_t via, csp_packet_t * packet) {
     packet->cfpid = packet->cfpid & 0x7F;
 
 	/* send frame */
-	csp_i2c_interface_data_t * ifdata = iface->interface_data;
+	//csp_i2c_interface_data_t * ifdata = iface->interface_data;
 	/* TODO */
-	ifdata->tx_func = csp_i2c_driver_tx;
+    csp_i2c_interface_data_t ifdata;
+	ifdata.tx_func = csp_i2c_driver_tx;
 
-	return (ifdata->tx_func)(iface->driver_data, packet);
+	return (ifdata.tx_func)(iface->driver_data, packet);
 }
 
 /**

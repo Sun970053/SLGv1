@@ -30,6 +30,9 @@
 #include "queue.h"
 #include "task.h"
 #include "semphr.h"
+
+#include "slg_task.h"
+#include "csp_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,6 +48,16 @@
   #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif /* __GNUC__ */
 
+#define TEST_MODE 			0
+#define SLG_MODE			1
+
+#define TURNON_BLUELED		1
+#define TURNOFF_BLUELED		2
+#define TURNON_REDLED		3
+#define TURNOFF_REDLED 		4
+#define BLINKON_BLUELED 	5
+#define BLINKOFF_BLUELED 	6
+#define IDLE_CMD			10
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,11 +71,22 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+TaskHandle_t rxCmdTaskHandler = NULL;
+TaskHandle_t processCmdTaskHandler = NULL;
+TaskHandle_t menuDisplayTaskHandler = NULL;
+TaskHandle_t blinkLEDTaskHandler = NULL;
+QueueHandle_t cmdQueue;
+
 PUTCHAR_PROTOTYPE
 {
 	HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
 	return ch;
 }
+
+char cmdBuffer[20] = {0};
+char rxData = 0;
+uint8_t cmdLen = 0;
+uint8_t statusFlag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,13 +95,57 @@ static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART2)
+	{
+		rxData = huart->Instance->DR;
+		HAL_UART_Receive_IT(huart, (uint8_t*)&rxData, 1);
 
+		cmdBuffer[cmdLen++] = rxData % 0xFF;
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		// check if received byte is user pressing enter
+		if(rxData == '\r')
+		{
+			printf("\r\n");
+			cmdLen = 0;
+
+			// notify cmd handling tasks
+			xTaskNotifyFromISR(menuDisplayTaskHandler, 0, eNoAction, &xHigherPriorityTaskWoken);
+			xTaskNotifyFromISR(rxCmdTaskHandler, 0, eNoAction, &xHigherPriorityTaskWoken);
+		}else
+			printf("%d", rxData-48);
+
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if(GPIO_Pin == B1_Pin)
+  {
+	  if(statusFlag == TEST_MODE)
+	  {
+		  printf("\r\nChange CMD mode: SLG mode\r\n");
+		  statusFlag = SLG_MODE;
+	  }
+	  else if(statusFlag == SLG_MODE)
+	  {
+		  printf("\r\nChange CMD mode: Test mode\r\n");
+		  statusFlag = TEST_MODE;
+	  }
+	  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	  xTaskNotifyFromISR(menuDisplayTaskHandler, 0, eNoAction, &xHigherPriorityTaskWoken);
+  }
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void BlueLEDTask(void* pvParameter);
-void RedLEDTask(void* pvParameter);
+void LEDBlinkTask(void* pvParameter);
+void menuDisplayTask(void* pvParameter);
+void rxCmdTask(void* pvParameter);
+void processCmdTask(void* pvParameter);
 
 void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer, StackType_t **ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize )
 {
@@ -97,23 +165,144 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
     *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
 }
 
-void BlueLEDTask(void* pvParameter)
+void LEDBlinkTask(void* pvParameter)
 {
 	while(1)
 	{
-		HAL_GPIO_TogglePin(LD6_GPIO_Port, LD6_Pin);
 		HAL_GPIO_TogglePin(LD4_GPIO_Port, LD4_Pin);
-		vTaskDelay(5000);
+		vTaskDelay(200);
 	}
 }
 
-void RedLEDTask(void* pvParameter)
+void menuDisplayTask(void* pvParameter)
 {
+	while(1){
+		if(statusFlag == TEST_MODE)
+		{
+			printf("===========TEST_MODE===========\r\n");
+			printf("Turn on blue LED -----------> 1\r\n");
+			printf("Turn off blue LED ----------> 2\r\n");
+			printf("Turn on red LED ------------> 3\r\n");
+			printf("Turn off red LED -----------> 4\r\n");
+			printf("Blink green LED ------------> 5\r\n");
+			printf("Turn off green LED ---------> 6\r\n");
+			printf("Idle command ---------------> 10\r\n\r\n");
+		}
+		else if(statusFlag == SLG_MODE)
+		{
+			printf("===========SLG_MODE===========\r\n");
+			printf("\"Ping\" between subsystems to detect if subsystem is alive. ----------------> 1\r\n");
+			printf("\"Start\" SLG into receiving mode and stream of received packets to OBC. ----> 2\r\n");
+			printf("\"Stop\" SLG’s active (receive or transmit) mode. ---------------------------> 3\r\n");
+			printf("Start SLG's \"transmit\" mode. ----------------------------------------------> 4 (no use)\r\n");
+			printf("Retrieve and \"synchronize SLG parameters\" with OBC. -----------------------> 5\r\n");
+			printf("Retrieve and \"synchronize SLG regional operation parameters\" with OBC. ----> 6\r\n");
+			printf("Retrieve and \"synchronize Tx parameters\". ---------------------------------> 7 (no use)\r\n");
+			printf("Retrieve and \"synchronize Tx packet part A\". ------------------------------> 8 (no use)\r\n");
+			printf("Retrieve and \"synchronize Tx packet part B\". ------------------------------> 9 (no use)\r\n");
+			printf("Retrieve and \"synchronize LoRa whitelist devices\". ------------------------> 10\r\n");
+			printf("\"Prints SLG parameters\" that are on SLG. ----------------------------------> 11\r\n");
+			printf("\"Print Regional parameters\". ----------------------------------------------> 12\r\n");
+			printf("Prints in debugger console \"Tx parameters\" on the SLG ---------------------> 13 (no use)\r\n");
+			printf("Prints in debugger console contents of \"Tx packet part A\". ----------------> 14 (no use)\r\n");
+			printf("Prints in debugger console contents of \"Tx packet part B\". ----------------> 15 (no use)\r\n");
+			printf("\"Prints device whitelist\" that is stored on SLG. --------------------------> 16\r\n");
+			printf("\"Prints section A\" of housekeeping data. ----------------------------------> 17\r\n");
+			printf("\"Prints section B\" of housekeeping data. ----------------------------------> 18\r\n");
+		}
+
+		xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
+	}
+}
+
+void rxCmdTask(void* pvParameter)
+{
+	uint8_t newCmd;
 	while(1)
 	{
-		HAL_GPIO_TogglePin(LD5_GPIO_Port, LD5_Pin);
-		HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-		vTaskDelay(10000);
+		// block until notification
+		xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
+
+		// critical section
+		taskENTER_CRITICAL();
+
+		uint8_t pos = 0;
+		uint8_t preNum = 0;
+		while(cmdBuffer[pos] != '\r' && cmdBuffer[pos] != '\n')
+		{
+			// get command code
+			newCmd = preNum*10 + (cmdBuffer[pos]-48);
+			preNum = newCmd;
+			pos++;
+		}
+
+		// get command code
+		// re-enable interrupts
+		taskEXIT_CRITICAL();
+		// add command to queue
+		xQueueSend(cmdQueue, &newCmd, (TickType_t)0);
+		// force context switch
+		taskYIELD();
+	}
+}
+
+void processCmdTask(void* pvParameter)
+{
+	uint8_t newCmd;
+	char rxBuffer;
+
+	while(1)
+	{
+		if(cmdQueue != 0)
+		{
+			if(xQueueReceive(cmdQueue, (void *)&rxBuffer, portMAX_DELAY))
+			{
+				newCmd = rxBuffer;
+				if(statusFlag == TEST_MODE){
+					switch(newCmd)
+					{
+					case TURNON_BLUELED:
+						HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, SET);
+						printf("\r\nTurn on Blue LED\r\n");
+						break;
+					case TURNOFF_BLUELED:
+						HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, RESET);
+						printf("\r\nTurn off Blue LED\r\n");
+						break;
+					case TURNON_REDLED:
+						HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, SET);
+						printf("\r\nTurn on Red LED\r\n");
+						break;
+					case TURNOFF_REDLED:
+						HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, RESET);
+						printf("\r\nTurn off Red LED\r\n");
+						break;
+					case BLINKON_BLUELED:
+						xTaskCreate(LEDBlinkTask, "Blink", configMINIMAL_STACK_SIZE, (void*)NULL, tskIDLE_PRIORITY, &blinkLEDTaskHandler);
+						printf("\r\nLED blink show started\r\n");
+						break;
+					case BLINKOFF_BLUELED:
+						if(blinkLEDTaskHandler != NULL)
+						{
+							// Suspend task
+							vTaskSuspend(blinkLEDTaskHandler);
+							// turn led off
+							HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, RESET);
+							printf("\nLED blink stopped.\r\n");
+						}
+					case IDLE_CMD:
+						printf("\r\nThis command is for testing.\r\n");
+					default:
+						printf("\r\nPlease input the correct command number.\r\n");
+						break;
+					}
+				}
+				else if(statusFlag == SLG_MODE)
+				{
+					cmd_slg_handle(newCmd);
+				}
+			}
+		}
 	}
 }
 
@@ -150,9 +339,13 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  xTaskCreate(BlueLEDTask, "BlueLEDTask", 128, (void*)NULL, 1, NULL);
-  xTaskCreate(RedLEDTask, "RedLEDTask", 128, (void*)NULL, 1, NULL);
-  //xTaskCreate(ConsoleTask, "ConsoleTask", 128, (void*)NULL, 1, NULL);
+  //create cmd queue
+  cmdQueue = xQueueCreate(10, sizeof(char));
+  HAL_UART_Receive_IT(&huart2,(uint8_t*)&rxData,1); // Enabling interrupt receive again
+  csp_start();
+  xTaskCreate(processCmdTask, "PROCESS", 4096, (void*)NULL, 2, &processCmdTaskHandler);
+  xTaskCreate(rxCmdTask, "RX", 1024, (void*)NULL, 2, &rxCmdTaskHandler);
+  xTaskCreate(menuDisplayTask, "MENU", 1024, (void*)NULL, 1, &menuDisplayTaskHandler);
 
   vTaskStartScheduler();
   /* USER CODE END 2 */
@@ -312,6 +505,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
