@@ -100,7 +100,7 @@ static int csp_route_security_check(uint32_t security_opts, csp_iface_t * iface,
 }
 
 __attribute__((weak)) void csp_input_hook(csp_iface_t * iface, csp_packet_t * packet) {
-	csp_print_packet("INP: S %u, D %u, Dp %u, Sp %u, Pr %u, Fl 0x%02X, Sz %" PRIu16 " VIA: %s\n",
+	printk("INP: S %u, D %u, Dp %u, Sp %u, Pr %u, Fl 0x%02X, Sz %" PRIu16 " VIA: %s\n",
 				   packet->id.src, packet->id.dst, packet->id.dport,
 				   packet->id.sport, packet->id.pri, packet->id.flags, packet->length, iface->name);
 }
@@ -127,7 +127,7 @@ int csp_route_work(void) {
 		return CSP_ERR_TIMEDOUT;
 	}
 
-	csp_input_hook(input.iface, packet);
+	//csp_input_hook(input.iface, packet);
 
 	/* Here there be promiscuous mode */
 #if (CSP_USE_PROMISC)
@@ -140,8 +140,8 @@ int csp_route_work(void) {
 
 	/* The packet is to me, if the address matches that of the incoming interface,
 	 * or the address matches the broadcast address of the incoming interface */
-	int is_to_me = ((input.iface->addr == packet->id.dst) || (csp_id_is_broadcast(packet->id.dst, input.iface->netmask)));
-
+	// int is_to_me = ((CSP_DB_ADD == packet->id.dst) || (csp_id_is_broadcast(packet->id.dst, input.iface)));
+	int is_to_me = ((input.iface->addr == packet->id.dst) || (csp_id_is_broadcast(packet->id.dst, input.iface)));
 	/* Deduplication */
 	if ((csp_conf.dedup == CSP_DEDUP_ALL) ||
 		((is_to_me) && (csp_conf.dedup == CSP_DEDUP_INCOMING)) ||
@@ -157,22 +157,10 @@ int csp_route_work(void) {
 	/* If the message is not to me, route the message to the correct interface */
 	if (!is_to_me) {
 
-		/* Find the destination interface */
-		csp_route_t * route = csp_rtable_find_route(packet->id.dst);
-
-		/* If the message resolves to the input interface, don't loop it back out */
-		if ((route == NULL) || ((route->iface == input.iface) && (input.iface->split_horizon_off == 0))) {
-			csp_buffer_free(packet);
-			return CSP_ERR_NONE;
-		}
-
 		/* Otherwise, actually send the message */
-		if (csp_send_direct(packet->id, packet, 0) != CSP_ERR_NONE) {
-			csp_buffer_free(packet);
-		}
-
-		/* Next message, please */
+		csp_send_direct(&packet->id, packet, input.iface);
 		return CSP_ERR_NONE;
+
 	}
 
 	/* Discard packets with unsupported options */
@@ -202,6 +190,7 @@ int csp_route_work(void) {
 
 	/* The message is to me, search for incoming socket */
 	socket = csp_port_get_socket(packet->id.dport);
+	//socket = csp_port_get_socket(CSP_PORT_MAX_BIND);//Assign to CSP_PORT_MAX_BIND port
 
 	/* If the socket is connection-less, deliver now */
 	if (socket && (socket->opts & CSP_SO_CONN_LESS)) {
@@ -248,7 +237,7 @@ int csp_route_work(void) {
 		idout.flags = packet->id.flags;
 
 		/* Create connection */
-		conn = csp_conn_new(packet->id, idout);
+		conn = csp_conn_new(packet->id, idout, CONN_SERVER);
 
 		if (!conn) {
 			csp_dbg_conn_out++;

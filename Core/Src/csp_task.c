@@ -10,19 +10,21 @@
 #define TASK_PRIORITY_CSP_ROUTER 1
 #define TASK_PRIORITY_SLG_I2C_RX 1
 #define TASK_PRIORITY_SLG_RECEIVING 1
-#define SLAVE_RX_BUFFER_SIZE 64
+
 
 TaskHandle_t xTaskHandle_CSP_ROUTER = NULL;
 TaskHandle_t xTaskHandle_SLG_I2C_RX = NULL;
 TaskHandle_t xTaskHandle_SLG_RECEIVING = NULL;
 
 QueueHandle_t i2cRxQueue;
+csp_i2c_interface_data_t ifdata1;
 /** Interface definition */
 csp_iface_t csp_if_i2c =
 {
 	.name = "I2C",
 	.nexthop = csp_i2c_tx,
     .addr = CSP_DB_ADD,
+	.interface_data = &ifdata1
 };
 
 int csp_i2c_init()
@@ -57,7 +59,36 @@ void router_stop()
 		xTaskHandle_CSP_ROUTER = NULL;
 	}
 }
+//---------------------------------------------------------
+/* I2C interrupt */
+uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
+uint8_t rxcount = 0;
+void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+	HAL_I2C_EnableListen_IT(hi2c);
 
+}
+
+void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode)
+{
+	if(TransferDirection == I2C_DIRECTION_TRANSMIT)
+	{
+		HAL_I2C_Slave_Seq_Receive_IT(hi2c, isr_rxData, SLAVE_RX_BUFFER_SIZE, I2C_FIRST_AND_LAST_FRAME);
+
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xQueueSendToFrontFromISR(i2cRxQueue, isr_rxData, &xHigherPriorityTaskWoken);
+	}
+}
+
+//void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
+//{
+//	if(hi2c->Instance == I2C1)
+//	{
+//		HAL_I2C_Slave_Receive_IT(&hi2c, isr_rxData, SLAVE_RX_BUFFER_SIZE);
+//	}
+//}
+
+//--------------------------------------------------------
 void SLG_I2C_RX()
 {
     uint8_t new_data[SLAVE_RX_BUFFER_SIZE];
@@ -172,7 +203,6 @@ void SLG_Data_Receiving()
 /*Initialize CSP*/
 int csp_start()
 {
-
     /* Init CSP */
     printf("CSP init\r\n");
     csp_init();
@@ -205,8 +235,8 @@ int csp_start()
     i2cRxQueue = xQueueCreate(5, sizeof(uint8_t*));
     if(xTaskCreate(SLG_I2C_RX, "SLG_RX", 4096 / sizeof( portSTACK_TYPE ), 0, TASK_PRIORITY_SLG_I2C_RX, &xTaskHandle_SLG_I2C_RX) != pdTRUE)
         printf("Fail to create SLG I2C RX task!\r\n");
-    if(xTaskCreate(SLG_Data_Receiving, "SLG_DATA", 4096 / sizeof( portSTACK_TYPE ), 0, TASK_PRIORITY_SLG_RECEIVING, &xTaskHandle_SLG_RECEIVING) != pdTRUE)
-        printf("Fail to create SLG data receiving task!\r\n");
+//    if(xTaskCreate(SLG_Data_Receiving, "SLG_DATA", 4096 / sizeof( portSTACK_TYPE ), 0, TASK_PRIORITY_SLG_RECEIVING, &xTaskHandle_SLG_RECEIVING) != pdTRUE)
+//        printf("Fail to create SLG data receiving task!\r\n");
 
 
     return 1;

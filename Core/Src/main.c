@@ -31,6 +31,7 @@
 #include "task.h"
 #include "semphr.h"
 
+#include "DS1307.h"
 #include "slg_task.h"
 #include "csp_task.h"
 /* USER CODE END Includes */
@@ -57,6 +58,7 @@
 #define TURNOFF_REDLED 		4
 #define BLINKON_BLUELED 	5
 #define BLINKOFF_BLUELED 	6
+#define UART3_TX			7
 #define IDLE_CMD			10
 /* USER CODE END PD */
 
@@ -76,6 +78,7 @@ TaskHandle_t processCmdTaskHandler = NULL;
 TaskHandle_t menuDisplayTaskHandler = NULL;
 TaskHandle_t blinkLEDTaskHandler = NULL;
 QueueHandle_t cmdQueue;
+QueueHandle_t slg_sfch;
 
 PUTCHAR_PROTOTYPE
 {
@@ -87,6 +90,9 @@ char cmdBuffer[20] = {0};
 char rxData = 0;
 uint8_t cmdLen = 0;
 uint8_t statusFlag = 0;
+uint8_t tx[2] = {0};
+extern uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -179,7 +185,12 @@ void menuDisplayTask(void* pvParameter)
 	while(1){
 		if(statusFlag == TEST_MODE)
 		{
-			printf("===========TEST_MODE===========\r\n");
+//			int ret = 0;
+//			slg_param_t slg_param = init_slg_param();
+//			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_SYNC_PARAMS,
+//					SLG_TIMEOUT, &slg_param.epoch, sizeof(slg_param_t), NULL, 0);
+//			if(ret) printf("SLG_PORT_SYNC_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_SYNC_PARAMS);
+//			printf("===========TEST_MODE===========\r\n");
 			printf("Turn on blue LED -----------> 1\r\n");
 			printf("Turn off blue LED ----------> 2\r\n");
 			printf("Turn on red LED ------------> 3\r\n");
@@ -288,10 +299,19 @@ void processCmdTask(void* pvParameter)
 							vTaskSuspend(blinkLEDTaskHandler);
 							// turn led off
 							HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, RESET);
-							printf("\nLED blink stopped.\r\n");
+							printf("\r\nLED blink stopped.\r\n");
 						}
+						break;
+					case UART3_TX:
+//						tx[0] = 0x05; tx[1] = 0x64;
+//						HAL_I2C_Master_Transmit(&hi2c2, 0x66, tx, 2, 1000);
+//						HAL_UART_Transmit(&huart3, (uint8_t*)"Fuck", 10, 200);
+						printf("\r\nUSART3 TX.\r\n");
+						break;
 					case IDLE_CMD:
+//						tx[0] = 0; tx[1] = 0;
 						printf("\r\nThis command is for testing.\r\n");
+						break;
 					default:
 						printf("\r\nPlease input the correct command number.\r\n");
 						break;
@@ -342,8 +362,9 @@ int main(void)
   //create cmd queue
   cmdQueue = xQueueCreate(10, sizeof(char));
   HAL_UART_Receive_IT(&huart2,(uint8_t*)&rxData,1); // Enabling interrupt receive again
+  //HAL_I2C_Slave_Receive_IT(&hi2c1, isr_rxData, SLAVE_RX_BUFFER_SIZE);
   csp_start();
-  xTaskCreate(processCmdTask, "PROCESS", 4096, (void*)NULL, 2, &processCmdTaskHandler);
+  xTaskCreate(processCmdTask, "PROCESS", 1024*4, (void*)NULL, 2, &processCmdTaskHandler);
   xTaskCreate(rxCmdTask, "RX", 1024, (void*)NULL, 2, &rxCmdTaskHandler);
   xTaskCreate(menuDisplayTask, "MENU", 1024, (void*)NULL, 1, &menuDisplayTaskHandler);
 
@@ -422,9 +443,9 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.ClockSpeed = 400000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.OwnAddress1 = 14;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
   hi2c1.Init.OwnAddress2 = 0;

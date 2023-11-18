@@ -11,9 +11,45 @@
 /* Interfaces are stored in a linked list */
 static csp_iface_t * interfaces = NULL;
 
-csp_iface_t * csp_iflist_get_by_subnet(uint16_t addr) {
+static csp_iface_t * dfl_if = NULL;
 
-	csp_iface_t * ifc = interfaces;
+void csp_iflist_set_default(csp_iface_t * interface) {
+	dfl_if = interface;
+}
+
+csp_iface_t * csp_iflist_get_default(void) {
+	return dfl_if;
+}
+
+int csp_iflist_is_within_subnet(uint16_t addr, csp_iface_t * ifc) {
+
+	if (ifc == NULL) {
+		return 0;
+	}
+	
+	uint16_t netmask = ((1 << ifc->netmask) - 1) << (csp_id_get_host_bits() - ifc->netmask);
+	uint16_t network_a = ifc->addr & netmask;
+	uint16_t network_b = addr & netmask;
+
+	if (network_a == network_b) {
+		return 1;
+	} else {
+		return 0;
+	}
+
+}
+
+csp_iface_t * csp_iflist_get_by_subnet(uint16_t addr, csp_iface_t * ifc) {
+
+	/* Head of list */
+	if (ifc == NULL) {
+		ifc = interfaces;
+
+	/* Otherwise, continue from user defined ifc */
+	} else {
+		ifc = ifc->next;
+	}
+
 	while (ifc) {
 
 		/* Reject searches involving subnets, if the netmask is invalud */
@@ -22,11 +58,7 @@ csp_iface_t * csp_iflist_get_by_subnet(uint16_t addr) {
 			continue;
 		}
 
-		/* Look if address is within subnet */
-		uint16_t netmask = ((1 << ifc->netmask) - 1) << (csp_id_get_host_bits() - ifc->netmask);
-		uint16_t network_a = ifc->addr & netmask;
-		uint16_t network_b = addr & netmask;
-		if (network_a == network_b) {
+		if (csp_iflist_is_within_subnet(addr, ifc)) {
 			return ifc;
 		}
 
@@ -62,6 +94,14 @@ csp_iface_t * csp_iflist_get_by_name(const char * name) {
 	return NULL;
 }
 
+csp_iface_t * csp_iflist_get_by_index(int idx) {
+	csp_iface_t * ifc = interfaces;
+	while(ifc && idx--) {
+		ifc = ifc->next;
+	}
+	return ifc;
+}
+
 int csp_iflist_add(csp_iface_t * ifc) {
 
 	ifc->next = NULL;
@@ -82,7 +122,6 @@ int csp_iflist_add(csp_iface_t * ifc) {
 
 		last->next = ifc;
 	}
-
 	return CSP_ERR_NONE;
 }
 

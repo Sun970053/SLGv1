@@ -29,7 +29,7 @@
 #define RDP_RST 0x01
 
 #ifndef CSP_USE_RDP_FAST_CLOSE
-#define CSP_USE_RDP_FAST_CLOSE 0
+#define CSP_USE_RDP_FAST_CLOSE 1
 #endif
 
 #if (CSP_USE_RDP)
@@ -131,9 +131,13 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 		csp_buffer_free(packet);
 		return CSP_ERR_NOMEM;
 	}
-	header->seq_nr = htobe16(seq_nr);
-	header->ack_nr = htobe16(ack_nr);
-	header->flags = flags;
+	header->seq_nr = csp_htobe16(seq_nr);
+	header->ack_nr = csp_htobe16(ack_nr);
+
+	/* Add a bit of ephemeral data to avoid CMP's to be deduplicated */
+	static uint8_t csp_rdp_incr = 0;
+	//header->flags = flags;
+	header->flags |= csp_rdp_incr++ << 4 | flags;
 
 	/* Send copy to tx_queue, before sending packet to IF */
 	if (flags & RDP_SYN) {
@@ -153,11 +157,7 @@ static int csp_rdp_send_cmp(csp_conn_t * conn, csp_packet_t * packet, int flags,
 					 packet->length, (unsigned int)(packet->length - sizeof(rdp_header_t)));
 
 	/* Send packet to IF */
-	if (csp_send_direct(idout, packet, 1) != CSP_ERR_NONE) {
-		csp_rdp_error("RDP %p: INTERFACE ERROR: not possible to send\n", conn);
-		csp_buffer_free(packet);
-		return CSP_ERR_BUSY;
-	}
+	csp_send_direct(&idout, packet, NULL);
 
 	/* Update last ACK time stamp */
 	if (flags & RDP_ACK) {
@@ -195,7 +195,7 @@ static int csp_rdp_send_eack(csp_conn_t * conn) {
 		/* Add seq nr to EACK packet */
 		rdp_header_t * header = csp_rdp_header_ref(packet);
 		if (space_available >= sizeof(uint16_t)) {
-			packet_eack->data16[packet_eack->length / sizeof(uint16_t)] = htobe16(header->seq_nr);
+			packet_eack->data16[packet_eack->length / sizeof(uint16_t)] = csp_htobe16(header->seq_nr);
 			packet_eack->length += sizeof(uint16_t);
 			space_available -= sizeof(uint16_t);
 			csp_rdp_protocol("RDP %p: Added EACK nr %u\n", conn, header->seq_nr);
@@ -221,12 +221,12 @@ static int csp_rdp_send_syn(csp_conn_t * conn) {
 	if (packet == NULL) return CSP_ERR_NOMEM;
 
 	/* Generate contents */
-	packet->data32[0] = __htonl(csp_rdp_window_size);
-	packet->data32[1] = __htonl(csp_rdp_conn_timeout);
-	packet->data32[2] = __htonl(csp_rdp_packet_timeout);
-	packet->data32[3] = __htonl(csp_rdp_delayed_acks);
-	packet->data32[4] = __htonl(csp_rdp_ack_timeout);
-	packet->data32[5] = __htonl(csp_rdp_ack_delay_count);
+	packet->data32[0] = csp_htobe32(csp_rdp_window_size);
+	packet->data32[1] = csp_htobe32(csp_rdp_conn_timeout);
+	packet->data32[2] = csp_htobe32(csp_rdp_packet_timeout);
+	packet->data32[3] = csp_htobe32(csp_rdp_delayed_acks);
+	packet->data32[4] = csp_htobe32(csp_rdp_ack_timeout);
+	packet->data32[5] = csp_htobe32(csp_rdp_ack_delay_count);
 	packet->length = 6 * sizeof(uint32_t);
 
 	return csp_rdp_send_cmp(conn, packet, RDP_SYN, conn->rdp.snd_iss, 0);
@@ -473,15 +473,12 @@ void csp_rdp_check_timeouts(csp_conn_t * conn) {
 			csp_rdp_protocol("RDP %p: TX Element timed out, retransmitting seq %u\n", conn, be16toh(header->seq_nr));
 
 			/* Update to latest outgoing ACK */
-			header->ack_nr = htobe16(conn->rdp.rcv_cur);
+			header->ack_nr = csp_htobe16(conn->rdp.rcv_cur);
 
 			/* Send copy to tx_queue */
 			packet->timestamp_tx = csp_get_ms();
 			csp_packet_t * new_packet = csp_buffer_clone(packet);
-			if (csp_send_direct(conn->idout, new_packet, 1) != CSP_ERR_NONE) {
-				csp_rdp_error("RDP %p: Retransmission failed\n", conn);
-				csp_buffer_free(new_packet);
-			}
+			csp_send_direct(&conn->idout, new_packet, NULL);
 		}
 
 		/* Requeue the TX element */
@@ -592,12 +589,12 @@ bool csp_rdp_new_packet(csp_conn_t * conn, csp_packet_t * packet) {
 			conn->rdp.rcv_lsa = rx_header->seq_nr;
 
 			/* Store RDP options */
-			conn->rdp.window_size = __ntohl(packet->data32[0]);
-			conn->rdp.conn_timeout = __ntohl(packet->data32[1]);
-			conn->rdp.packet_timeout = __ntohl(packet->data32[2]);
-			conn->rdp.delayed_acks = __ntohl(packet->data32[3]);
-			conn->rdp.ack_timeout = __ntohl(packet->data32[4]);
-			conn->rdp.ack_delay_count = __ntohl(packet->data32[5]);
+			conn->rdp.window_size = be32toh(packet->data32[0]);
+			conn->rdp.conn_timeout = be32toh(packet->data32[1]);
+			conn->rdp.packet_timeout = be32toh(packet->data32[2]);
+			conn->rdp.delayed_acks = be32toh(packet->data32[3]);
+			conn->rdp.ack_timeout = be32toh(packet->data32[4]);
+			conn->rdp.ack_delay_count = be32toh(packet->data32[5]);
 			csp_rdp_protocol("RDP %p: window size %" PRIu32 ", conn timeout %" PRIu32 ", packet timeout %" PRIu32 ", delayed acks: %" PRIu32 ", ack timeout %" PRIu32 ", ack each %" PRIu32 " packet\n",
 							 conn, conn->rdp.window_size, conn->rdp.conn_timeout, conn->rdp.packet_timeout,
 							 conn->rdp.delayed_acks, conn->rdp.ack_timeout, conn->rdp.ack_delay_count);
@@ -906,8 +903,8 @@ int csp_rdp_send(csp_conn_t * conn, csp_packet_t * packet) {
 		csp_rdp_error("RDP %p: No space for RDP header (send)\n", conn);
 		return CSP_ERR_NOMEM;
 	}
-	tx_header->ack_nr = htobe16(conn->rdp.rcv_cur);
-	tx_header->seq_nr = htobe16(conn->rdp.snd_nxt);
+	tx_header->ack_nr = csp_htobe16(conn->rdp.rcv_cur);
+	tx_header->seq_nr = csp_htobe16(conn->rdp.snd_nxt);
 	tx_header->flags |= RDP_ACK;
 
 	/* Send copy to tx_queue */

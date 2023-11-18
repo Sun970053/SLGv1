@@ -10,6 +10,8 @@
 
 #include "slg_task.h"
 
+#define SLAVE_RX_BUFFER_SIZE 128
+
 /** CSP I2C initialize */
 int csp_i2c_init();
 

@@ -185,6 +185,7 @@ int cmd_slg_handle(int cmdValue)
 	{
 		case SLG_PORT_PING:
 		{
+
 			ret = csp_ping(CSP_SLG_ADD, SLG_TIMEOUT, 1, CSP_O_NONE);
 			if(ret) printf("SLG_PORT_PING: \'%d\' ---> success\r\n", SLG_PORT_PING);
 			break;

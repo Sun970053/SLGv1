@@ -106,7 +106,7 @@
 #define CFP2_DST_OFFSET 13
 
 #define CFP2_SENDER_SIZE 6
-#define CFP2_SENDER_MASK 0x1F
+#define CFP2_SENDER_MASK 0x3F
 #define CFP2_SENDER_OFFSET 7
 
 #define CFP2_SC_MASK 0x3
@@ -170,6 +170,8 @@ typedef struct {
     uint32_t cfp_packet_counter;
     /** Tx function */
     csp_can_driver_tx_t tx_func;
+    /** PBUF queue */
+    csp_packet_t * pbufs;
 } csp_can_interface_data_t;
 
 /**

@@ -22,16 +22,17 @@
 #include "csp/interfaces/csp_if_i2c.h"
 #include "csp/csp_types.h"
 
+
 #define SLG_PACKET_MAX  40000
 #define SLG_GET_PARAM_RET_LEN 44
 #define SLG_GET_REGPARAM_RET_LEN  96
 #define SLG_GET_WHITELIST_RET_LEN  44
 #define SLG_SF_QUEUE_MAX   60
 
-#define SLG_TIMEOUT						2000 //1 sec timeout
+#define SLG_TIMEOUT						1000 //1 sec timeout
 
-#define CSP_SLG_ADD						6
-#define CSP_DB_ADD						7 //TODO
+#define CSP_SLG_ADD						0x06
+#define CSP_DB_ADD						0x07 //TODO
 
 #define CMD_FAIL						0
 
@@ -93,6 +94,8 @@
 #define MOD_LORA						0x10
 
 #define TASK_PRIORITY_SLG_RECEIVING 	1
+
+
 
 /* SLG Parameters */
 typedef struct slg_parameter
@@ -285,5 +288,7 @@ slg_whitelist_t init_slg_whitelist(void);
 int cmd_slg_handle(int);
 
 void vTask_SLG_Data_Collection(void* pvParameter);
+
+void vTask_SLG_Forward(void * pvParameters);
 
 #endif /* INC_SLG_TASK_H_ */

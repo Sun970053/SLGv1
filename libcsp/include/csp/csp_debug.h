@@ -30,7 +30,6 @@ extern uint8_t csp_dbg_errno;
 #define CSP_DBG_ERR_MTU_EXCEEDED 2
 #define CSP_DBG_ERR_ALREADY_FREE 3
 #define CSP_DBG_ERR_REFCOUNT 4
-#define CSP_DBG_ERR_INVALID_CAN_CONFIG 5
 #define CSP_DBG_ERR_INVALID_RTABLE_ENTRY 6
 #define CSP_DBG_ERR_UNSUPPORTED 7
 #define CSP_DBG_ERR_INVALID_BIND_PORT 8
@@ -57,7 +56,8 @@ void csp_print_func(const char * fmt, ...);
 
 /* Compile time disable all printout from CSP */
 #if (CSP_ENABLE_CSP_PRINT)
-#define csp_print(...) csp_print_func(__VA_ARGS__);
+//#define csp_print(...) csp_print_func(__VA_ARGS__);
+#define csp_print(...) printf(__VA_ARGS__);
 #else
 #define csp_print(...) do {} while(0)
 #endif

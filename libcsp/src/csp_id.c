@@ -50,7 +50,7 @@ void csp_id1_prepend(csp_packet_t * packet) {
 					(packet->id.flags << CSP_ID1_FLAGS_OFFSET));
 
 	/* Convert to big / network endian */
-	id1 = __htonl(id1);
+	id1 = csp_htobe32(id1);
 
 	packet->frame_begin = packet->data - CSP_ID1_HEADER_SIZE;
 	packet->frame_length = packet->length + CSP_ID1_HEADER_SIZE;
@@ -70,7 +70,7 @@ int csp_id1_strip(csp_packet_t * packet) {
 	packet->length = packet->frame_length - CSP_ID1_HEADER_SIZE;
 
 	/* Convert to host order */
-	id1 = __ntohl(id1);
+	id1 = csp_htobe32(id1);
 
 	/* Parse header:
 	 * Now in easy to work with in 32 bit register */
@@ -132,7 +132,7 @@ void csp_id2_prepend(csp_packet_t * packet) {
 
 	/* Convert to big / network endian:
 	 * We first shift up the 48 bit header to most significant end of the 64-bit */
-	id2 = __htonll(id2 << 16);
+	id2 = csp_htobe32(id2 << 16);
 
 	packet->frame_begin = packet->data - CSP_ID2_HEADER_SIZE;
 	packet->frame_length = packet->length + CSP_ID2_HEADER_SIZE;
@@ -155,7 +155,7 @@ int csp_id2_strip(csp_packet_t * packet) {
 	/* Convert to host order:
 	 * Most significant byte ends in byte 7, we then shift down
 	 * to get MSB into byte 5 */
-	id2 = __htonll(id2) >> 16;
+	id2 = csp_htobe32(id2) >> 16;
 
 	/* Parse header:
 	 * Now in easy to work with in 32 bit register */
@@ -228,9 +228,14 @@ unsigned int csp_id_get_max_port(void) {
 	return ((1 << (CSP_ID2_PORT_SIZE)) - 1);
 }
 
-int csp_id_is_broadcast(uint16_t addr, uint16_t netmask) {
-	uint16_t hostmask = (1 << (csp_id_get_host_bits() - netmask)) - 1;
-	if ((addr & hostmask) == hostmask) {
+int csp_id_is_broadcast(uint16_t addr, csp_iface_t * iface) {
+	uint16_t hostmask = (1 << (csp_id_get_host_bits() - iface->netmask)) - 1;
+	uint16_t netmask = (1 << csp_id_get_host_bits()) - 1 - hostmask;
+	if (((addr & hostmask) == hostmask) && ((addr & netmask) == (iface->addr & netmask))) {
+		return 1;
+	}
+
+	if (addr == csp_id_get_max_nodeid()) {
 		return 1;
 	}
 	return 0;
