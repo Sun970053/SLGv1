@@ -91,7 +91,7 @@ char rxData = 0;
 uint8_t cmdLen = 0;
 uint8_t statusFlag = 0;
 uint8_t tx[2] = {0};
-extern uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
+//extern uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
 
 /* USER CODE END PV */
 
@@ -185,12 +185,8 @@ void menuDisplayTask(void* pvParameter)
 	while(1){
 		if(statusFlag == TEST_MODE)
 		{
-//			int ret = 0;
-//			slg_param_t slg_param = init_slg_param();
-//			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_SYNC_PARAMS,
-//					SLG_TIMEOUT, &slg_param.epoch, sizeof(slg_param_t), NULL, 0);
-//			if(ret) printf("SLG_PORT_SYNC_PARAMS: \'%d\' ---> success\r\n", SLG_PORT_SYNC_PARAMS);
-//			printf("===========TEST_MODE===========\r\n");
+			vTaskDelay(1000);
+			printf("===========TEST_MODE===========\r\n");
 			printf("Turn on blue LED -----------> 1\r\n");
 			printf("Turn off blue LED ----------> 2\r\n");
 			printf("Turn on red LED ------------> 3\r\n");
@@ -201,6 +197,7 @@ void menuDisplayTask(void* pvParameter)
 		}
 		else if(statusFlag == SLG_MODE)
 		{
+			vTaskDelay(1000);
 			printf("===========SLG_MODE===========\r\n");
 			printf("\"Ping\" between subsystems to detect if subsystem is alive. ----------------> 1\r\n");
 			printf("\"Start\" SLG into receiving mode and stream of received packets to OBC. ----> 2\r\n");
@@ -364,7 +361,7 @@ int main(void)
   HAL_UART_Receive_IT(&huart2,(uint8_t*)&rxData,1); // Enabling interrupt receive again
   //HAL_I2C_Slave_Receive_IT(&hi2c1, isr_rxData, SLAVE_RX_BUFFER_SIZE);
   csp_start();
-  xTaskCreate(processCmdTask, "PROCESS", 1024*4, (void*)NULL, 2, &processCmdTaskHandler);
+  xTaskCreate(processCmdTask, "PROCESS", 1024*4, (void*)NULL, 1, &processCmdTaskHandler);
   xTaskCreate(rxCmdTask, "RX", 1024, (void*)NULL, 2, &rxCmdTaskHandler);
   xTaskCreate(menuDisplayTask, "MENU", 1024, (void*)NULL, 1, &menuDisplayTaskHandler);
 
@@ -443,7 +440,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.ClockSpeed = 100000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
   hi2c1.Init.OwnAddress1 = 14;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;

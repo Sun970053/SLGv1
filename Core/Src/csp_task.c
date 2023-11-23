@@ -18,6 +18,8 @@ TaskHandle_t xTaskHandle_SLG_RECEIVING = NULL;
 
 QueueHandle_t i2cRxQueue;
 csp_i2c_interface_data_t ifdata1;
+
+//uint8_t new_data[SLAVE_RX_BUFFER_SIZE];
 /** Interface definition */
 csp_iface_t csp_if_i2c =
 {
@@ -61,47 +63,89 @@ void router_stop()
 }
 //---------------------------------------------------------
 /* I2C interrupt */
+#define SLAVE_RX_BUFFER_SIZE 128
 uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
 uint8_t rxcount = 0;
+
+int countAddr = 0;
+int countererror = 0;
+
+void process_i2c_data()
+{
+	// dynamic array
+	uint8_t* process_data = (uint8_t*)malloc(rxcount*sizeof(uint8_t));
+	memcpy(process_data, isr_rxData, rxcount);
+
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	xQueueSendFromISR(i2cRxQueue, (void*)&isr_rxData, &xHigherPriorityTaskWoken);
+}
+
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
 {
 	HAL_I2C_EnableListen_IT(hi2c);
-
 }
 
 void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode)
 {
 	if(TransferDirection == I2C_DIRECTION_TRANSMIT)
 	{
-		HAL_I2C_Slave_Seq_Receive_IT(hi2c, isr_rxData, SLAVE_RX_BUFFER_SIZE, I2C_FIRST_AND_LAST_FRAME);
-
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-		xQueueSendToFrontFromISR(i2cRxQueue, isr_rxData, &xHigherPriorityTaskWoken);
+		rxcount = 0;
+		countAddr++;
+		// Refresh I2C Rx array
+		memset(isr_rxData, '\0', SLAVE_RX_BUFFER_SIZE);
+		// receive using sequential function
+		HAL_I2C_Slave_Seq_Receive_IT(hi2c, isr_rxData + rxcount, 1, I2C_FIRST_FRAME);
 	}
 }
 
-//void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
-//{
-//	if(hi2c->Instance == I2C1)
-//	{
-//		HAL_I2C_Slave_Receive_IT(&hi2c, isr_rxData, SLAVE_RX_BUFFER_SIZE);
-//	}
-//}
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+	if(hi2c->Instance == I2C1)
+	{
+		rxcount++;
+		if(rxcount < SLAVE_RX_BUFFER_SIZE)
+		{
+			if(rxcount < SLAVE_RX_BUFFER_SIZE-1)
+			{
+				HAL_I2C_Slave_Seq_Receive_IT(hi2c, isr_rxData + rxcount, 1, I2C_NEXT_FRAME);
+			}
+			else if(rxcount == SLAVE_RX_BUFFER_SIZE-1)
+			{
+				HAL_I2C_Slave_Seq_Receive_IT(hi2c, isr_rxData + rxcount, 1, I2C_LAST_FRAME);
+			}
+		}
+
+		if(rxcount == SLAVE_RX_BUFFER_SIZE) process_i2c_data();
+	}
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
+{
+	if(hi2c->Instance == I2C1)
+	{
+		countererror++;
+		uint32_t errorcode = HAL_I2C_GetError(hi2c);
+		if (errorcode == 4) process_i2c_data();
+		HAL_I2C_EnableListen_IT(hi2c);
+	}
+}
 
 //--------------------------------------------------------
 void SLG_I2C_RX()
 {
-    uint8_t new_data[SLAVE_RX_BUFFER_SIZE];
-
+	uint8_t* new_data = NULL;;
+	portBASE_TYPE result = pdFALSE;
     csp_packet_t * packet = csp_buffer_get(SLAVE_RX_BUFFER_SIZE);
 
     while(1)
     {
-        if(xQueueReceive(i2cRxQueue, &new_data[0], CSP_MAX_TIMEOUT) == pdPASS)
+    	result = xQueueReceive(i2cRxQueue, &new_data, CSP_MAX_TIMEOUT);
+//    	result = uxQueueMessagesWaitingFromISR(i2cRxQueue);
+    	if(result == pdPASS)
         {
             csp_id_setup_rx(packet);
-            packet->frame_length = new_data[0];
-            memcpy(packet->frame_begin, &new_data[1], packet->frame_length);
+            packet->frame_length = rxcount;
+            memcpy(packet->frame_begin, &isr_rxData[0], packet->frame_length);
             csp_i2c_rx(&csp_if_i2c, packet, NULL);
             csp_buffer_free(packet);
         }
@@ -116,7 +160,7 @@ void SLG_Data_Receiving()
     /* Create socket with no specific socket options */
 	csp_socket_t sock = {0};
 
-	/* Bind socket to all ports (?) */ //TODO
+	/* Bind socket to all ports (?) */
 	csp_bind(&sock, CSP_ANY);
 
 	/* Create a backlog of 10 connections, i.e. up to 10 new connections can be queued */
