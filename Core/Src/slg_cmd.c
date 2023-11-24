@@ -207,10 +207,6 @@ int cmd_slg_handle(int cmdValue)
 			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
 			if(ret) printf("SLG_PORT_STOP: \'%d\' ---> success\r\n", SLG_PORT_STOP);
 
-			vTaskDelay(500);
-			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
-			if(ret) printf("SLG_PORT_STOP: \'%d\' ---> success\r\n", SLG_PORT_STOP);
-
 			if(xTaskHandle_SLG_RECEIVING != NULL)
 			{
 				vTaskDelete(xTaskHandle_SLG_RECEIVING);

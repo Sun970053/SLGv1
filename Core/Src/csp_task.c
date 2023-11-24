@@ -64,7 +64,7 @@ void router_stop()
 }
 //---------------------------------------------------------
 /* I2C interrupt */
-#define SLAVE_RX_BUFFER_SIZE 128
+#define SLAVE_RX_BUFFER_SIZE 254
 uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
 uint8_t rxcount = 0;
 
@@ -78,7 +78,7 @@ void process_i2c_data()
 	memcpy(process_data, isr_rxData, rxcount);
 
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xQueueSendFromISR(i2cRxQueue, (void*)&isr_rxData, &xHigherPriorityTaskWoken);
+	xQueueSendFromISR(i2cRxQueue, process_data, &xHigherPriorityTaskWoken);
 }
 
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
@@ -134,13 +134,13 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 //--------------------------------------------------------
 void SLG_I2C_RX()
 {
-	uint8_t* new_data = NULL;;
+	uint8_t new_data[SLAVE_RX_BUFFER_SIZE] = {0};
 	portBASE_TYPE result = pdFALSE;
     csp_packet_t * packet = csp_buffer_get(SLAVE_RX_BUFFER_SIZE);
 
     while(1)
     {
-    	result = xQueueReceive(i2cRxQueue, &new_data, CSP_MAX_TIMEOUT);
+    	result = xQueueReceive(i2cRxQueue, &new_data[0], CSP_MAX_TIMEOUT);
 //    	result = uxQueueMessagesWaitingFromISR(i2cRxQueue);
     	if(result == pdPASS)
         {
