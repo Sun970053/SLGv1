@@ -20,7 +20,6 @@
 #define CSP_MAX_DELAY CSP_MAX_TIMEOUT
 #define CSP_INFINITY CSP_MAX_TIMEOUT
 
-#define CSP_DB_ADD 7 //TODO
 
 
 enum csp_dedup_types {

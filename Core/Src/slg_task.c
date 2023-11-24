@@ -28,7 +28,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
     uint32_t second;
 	uint32_t tprv = 0, tnow = 0;
 	tnow = tprv;
-	/* Bind socket to all ports (?) */ //TODO
+	/* Bind socket to all ports (?) */
 	csp_bind(&sock, CSP_ANY);
 
 	/* Create a backlog of 10 connections, i.e. up to 10 new connections can be queued */
@@ -62,7 +62,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
             {
                 case SLG_DATA_A:
 					#ifdef INFO_PRINTF
-                	printf("[SLG] packet part A received\n");
+                	printf("[SLG] packet part A received\r\n");
 					#endif
                     memcpy(&slg_hk_a.time, packet->data, packet->length);
                     /*slg_hk_a.time = csp_ntoh32(slg_hk_a.time);
@@ -81,7 +81,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
                     break;
                 case SLG_DATA_B:
 					#ifdef INFO_PRINTF
-                	printf("[SLG] packet part B received\n");
+                	printf("[SLG] packet part B received\r\n");
 					#endif
                 	memset(&slg_hk_b.rx_b, 0, sizeof(slg_hk_b_s));
                     memcpy(&slg_hk_b.rx_b, packet->data, packet->length);
@@ -130,7 +130,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
 
     fhandle = 0xFF;
 	#ifdef INFO_PRINTF
-    printf("[SLG] LoRa packet receive task off\n");
+    printf("[SLG] LoRa packet receive task off\r\n");
 	#endif
     cspret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
     xTaskHandle_SLG_RECEIVING = NULL;
@@ -177,29 +177,29 @@ void vTask_SLG_Forward(void * pvParameters)
                     slg_hk_a.rx_a.crc = csp_ntoh16(slg_hk_a.rx_a.crc);
                     slg_hk_a.rx_a.size = csp_ntoh16(slg_hk_a.rx_a.size);
 					#ifdef INFO_PRINTF
-					printf("[SLG] packet part A received\n");
-					printf("time:       %ld\n", slg_hk_a.time);
-					printf("count:      %ld\n", slg_hk_a.count);
-					printf("freq_hz:    %ld\n", slg_hk_a.rx_a.freq_hz);
-					printf("if_chain:   %d\n", slg_hk_a.rx_a.if_chain);
-					printf("status:     %d\n", slg_hk_a.rx_a.status);
-					printf("count_us:   %ld\n", slg_hk_a.rx_a.count_us);
-					printf("rf_chain:   %d\n", slg_hk_a.rx_a.rf_chain);
-					printf("modulation: %d\n", slg_hk_a.rx_a.modulation);
-					printf("bandwidth:  %d\n", slg_hk_a.rx_a.bandwidth);
-					printf("datarate:   %ld\n", slg_hk_a.rx_a.datarate);
-					printf("coderate:   %d\n", slg_hk_a.rx_a.coderate);
-					printf("rssi:       %ld\n", slg_hk_a.rx_a.rssi);
-					printf("snr:        %ld\n", slg_hk_a.rx_a.snr);
-					printf("snr_min:    %ld\n", slg_hk_a.rx_a.snr_min);
-					printf("snr_max:    %ld\n", slg_hk_a.rx_a.snr_max);
-					printf("crc:        %d\n", slg_hk_a.rx_a.crc);
-					printf("size:       %d\n", slg_hk_a.rx_a.size);
-					printf("mhdr:       %d\n", slg_hk_a.rx_a.mhdr);
-					printf("devaddr:    %d, %d, %d, %d\n", slg_hk_a.rx_a.devaddr[0], slg_hk_a.rx_a.devaddr[1], slg_hk_a.rx_a.devaddr[2], slg_hk_a.rx_a.devaddr[3]);
-					printf("fctrl:      %d\n", slg_hk_a.rx_a.fctrl);
-					printf("fcnt:       %d, %d\n", slg_hk_a.rx_a.fcnt[0], slg_hk_a.rx_a.fcnt[1]);
-					printf("checker:    %d\n", slg_hk_a.checker);
+					printf("[SLG] packet part A received\r\n");
+					printf("time:       %ld\r\n", slg_hk_a.time);
+					printf("count:      %ld\r\n", slg_hk_a.count);
+					printf("freq_hz:    %ld\r\n", slg_hk_a.rx_a.freq_hz);
+					printf("if_chain:   %d\r\n", slg_hk_a.rx_a.if_chain);
+					printf("status:     %d\r\n", slg_hk_a.rx_a.status);
+					printf("count_us:   %ld\r\n", slg_hk_a.rx_a.count_us);
+					printf("rf_chain:   %d\r\n", slg_hk_a.rx_a.rf_chain);
+					printf("modulation: %d\r\n", slg_hk_a.rx_a.modulation);
+					printf("bandwidth:  %d\r\n", slg_hk_a.rx_a.bandwidth);
+					printf("datarate:   %ld\r\n", slg_hk_a.rx_a.datarate);
+					printf("coderate:   %d\r\n", slg_hk_a.rx_a.coderate);
+					printf("rssi:       %ld\r\n", slg_hk_a.rx_a.rssi);
+					printf("snr:        %ld\r\n", slg_hk_a.rx_a.snr);
+					printf("snr_min:    %ld\r\n", slg_hk_a.rx_a.snr_min);
+					printf("snr_max:    %ld\r\n", slg_hk_a.rx_a.snr_max);
+					printf("crc:        %d\r\n", slg_hk_a.rx_a.crc);
+					printf("size:       %d\r\n", slg_hk_a.rx_a.size);
+					printf("mhdr:       %d\r\n", slg_hk_a.rx_a.mhdr);
+					printf("devaddr:    %d, %d, %d, %d\r\n", slg_hk_a.rx_a.devaddr[0], slg_hk_a.rx_a.devaddr[1], slg_hk_a.rx_a.devaddr[2], slg_hk_a.rx_a.devaddr[3]);
+					printf("fctrl:      %d\r\n", slg_hk_a.rx_a.fctrl);
+					printf("fcnt:       %d, %d\r\n", slg_hk_a.rx_a.fcnt[0], slg_hk_a.rx_a.fcnt[1]);
+					printf("checker:    %d\r\n", slg_hk_a.checker);
 					#endif
                     csp_buffer_free(packet);
                     status |= SLG_HK_Rec_A;
@@ -208,14 +208,14 @@ void vTask_SLG_Forward(void * pvParameters)
                 	memset(&slg_hk_b.rx_b, 0, sizeof(slg_hk_b_s));
                     memcpy(&slg_hk_b.rx_b, packet->data, packet->length);
 					#ifdef INFO_PRINTF
-                    printf("[SLG] packet part B received\n");
-                    printf("payload:\n");
+                    printf("[SLG] packet part B received\r\n");
+                    printf("payload:\r\n");
                     for(int i = 0; i < 248; i++)
                     {
                         printf("%02X ", slg_hk_b.rx_b.payload[i]);
-                        if(i%16 == 15){printf("\n");}
+                        if(i%16 == 15){printf("\r\n");}
                     }
-                    printf("\nchecker: %d\n", slg_hk_b.checker);
+                    printf("\r\nchecker: %d\r\n", slg_hk_b.checker);
 					#endif
                     csp_buffer_free(packet);
                     status |= SLG_HK_Rec_B;

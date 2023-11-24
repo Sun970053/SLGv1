@@ -32,7 +32,7 @@
 #define SLG_TIMEOUT						1000 //1 sec timeout
 
 #define CSP_SLG_ADD						0x06
-#define CSP_DB_ADD						0x07 //TODO
+#define CSP_DB_ADD						0x07
 
 #define CMD_FAIL						0
 
@@ -55,6 +55,8 @@
 #define SLG_PORT_PRINT_WHITELIST 		16
 #define SLG_PORT_PRINT_HOUSEKEEPING_A 	17
 #define SLG_PORT_PRINT_HOUSEKEEPING_B 	18
+#define SLG_FORWARD_ON					19
+#define SLG_FORWARD_OFF					20
 
 /* SLG will send LoRa data packets in 2 segments to 2 different ports,
  * expecting that the OBC to assemble the data to form a complete packet */
@@ -94,6 +96,7 @@
 #define MOD_LORA						0x10
 
 #define TASK_PRIORITY_SLG_RECEIVING 	1
+#define TASK_PRIORITY_SLG_FORWARD		1
 
 
 

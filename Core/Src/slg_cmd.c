@@ -8,6 +8,9 @@
 #include "slg_task.h"
 
 extern TaskHandle_t xTaskHandle_SLG_RECEIVING;
+TaskHandle_t xTaskHandle_SLG_FORWARD = NULL;
+
+extern QueueHandle_t slg_sfch;
 /* Initialize SLG parameters. */
 /* The default parameters loaded onto SLG upon bootup are also listed */
 slg_param_t init_slg_param(void)
@@ -88,8 +91,8 @@ slg_region_param_t init_slg_region_param(void)
 	slg_region_param.chan_std_enable = true;
 	slg_region_param.chan_std_radio = 1;
 	slg_region_param.chan_std_if = 100000;
-	slg_region_param.chan_std_bw = BW_250KHz;
-	slg_region_param.chan_std_sf = DR_LORA_SF7;
+	slg_region_param.chan_std_bw = BW_125KHz;
+	slg_region_param.chan_std_sf = DR_LORA_SF10;
 	slg_region_param.chan_FSK_enable = true;
 	slg_region_param.chan_FSK_radio = 1;
 	slg_region_param.chan_FSK_if = -200000;
@@ -408,10 +411,37 @@ int cmd_slg_handle(int cmdValue)
 				printf("%02x ", slg_hk_b.rx_b.payload[i]);
 				if(i%16 == 15) printf("\r\n");
 			}
-			printf("checker:    %d\r\n", slg_hk_a.checker);
+			printf("\r\nchecker:    %d\r\n", slg_hk_a.checker);
 			break;
 		}
-
+		case SLG_FORWARD_ON:
+		{
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_START, SLG_TIMEOUT, NULL, 0, NULL, 0);
+			if(xTaskHandle_SLG_FORWARD == NULL)
+			{
+				xQueueReset(slg_sfch);
+				if(xTaskCreate(vTask_SLG_Forward, "SLG_FORWARD", 4096, (void*)&params, TASK_PRIORITY_SLG_FORWARD, &xTaskHandle_SLG_FORWARD) != pdTRUE)
+				{
+					printf("Fail to create SLG data forward task!\r\n");
+				}
+			}
+			break;
+		}
+		case SLG_FORWARD_OFF:
+		{
+			if(xTaskHandle_SLG_FORWARD != NULL)
+			{
+				vTaskDelete(xTaskHandle_SLG_FORWARD);
+				xTaskHandle_SLG_FORWARD =NULL;
+				xQueueReset(slg_sfch);
+			}
+			ret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
+			break;
+		}
+		default:
+		{
+			printf("\r\nInput error code. Please input correct number again.\r\n");
+		}
 	}
 	return 0;
 }

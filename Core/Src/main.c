@@ -78,7 +78,7 @@ TaskHandle_t processCmdTaskHandler = NULL;
 TaskHandle_t menuDisplayTaskHandler = NULL;
 TaskHandle_t blinkLEDTaskHandler = NULL;
 QueueHandle_t cmdQueue;
-QueueHandle_t slg_sfch;
+
 
 PUTCHAR_PROTOTYPE
 {
@@ -198,9 +198,9 @@ void menuDisplayTask(void* pvParameter)
 		else if(statusFlag == SLG_MODE)
 		{
 			vTaskDelay(1000);
-			printf("===========SLG_MODE===========\r\n");
+			printf("====================================SLG_MODE==================================\r\n");
 			printf("\"Ping\" between subsystems to detect if subsystem is alive. ----------------> 1\r\n");
-			printf("\"Start\" SLG into receiving mode and stream of received packets to OBC. ----> 2\r\n");
+			printf("\"Start\" SLG in receiving mode and stream of received packets to OBC. ------> 2\r\n");
 			printf("\"Stop\" SLG’s active (receive or transmit) mode. ---------------------------> 3\r\n");
 			printf("Start SLG's \"transmit\" mode. ----------------------------------------------> 4 (no use)\r\n");
 			printf("Retrieve and \"synchronize SLG parameters\" with OBC. -----------------------> 5\r\n");
@@ -217,6 +217,9 @@ void menuDisplayTask(void* pvParameter)
 			printf("\"Prints device whitelist\" that is stored on SLG. --------------------------> 16\r\n");
 			printf("\"Prints section A\" of housekeeping data. ----------------------------------> 17\r\n");
 			printf("\"Prints section B\" of housekeeping data. ----------------------------------> 18\r\n");
+			printf("=====================================Additional commands===================================\r\n");
+			printf("\"Start up SLG in forward mode\", which continuously receives and handles HK data. ------> 19\r\n");
+			printf("\"Stop SLG's forward mode\", to deactivate the associate task and delete it . -----------> 20\r\n");
 		}
 
 		xTaskNotifyWait(0, 0, NULL, portMAX_DELAY);
