@@ -252,7 +252,7 @@ void vTask_SLG_Forward(void * pvParameters)
             memcpy(slg_pkt.fcnt, slg_hk_a.rx_a.fcnt, 2);
             memcpy(slg_pkt.payload, slg_hk_b.rx_b.payload, 284);
 
-            xQueueSendToBack(slg_sfch, &slg_pkt.header.fileindex, 1000);
+            //xQueueSendToBack(slg_sfch, &slg_pkt.header.fileindex, 1000);
             status = SLG_HK_Rec_None;
         }
 		/* Close current connection */

@@ -73,12 +73,12 @@ int countererror = 0;
 
 void process_i2c_data()
 {
-	// dynamic array
-	uint8_t* process_data = (uint8_t*)malloc(rxcount*sizeof(uint8_t));
-	memcpy(process_data, isr_rxData, rxcount);
+//	// dynamic array
+//	uint8_t* process_data = (uint8_t*)malloc(rxcount*sizeof(uint8_t));
+//	memcpy(process_data, isr_rxData, rxcount);
 
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xQueueSendFromISR(i2cRxQueue, process_data, &xHigherPriorityTaskWoken);
+	xQueueSendFromISR(i2cRxQueue, isr_rxData, &xHigherPriorityTaskWoken);
 }
 
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
@@ -187,7 +187,7 @@ int csp_start()
     /* Start Receiving Task */
 
 	slg_sfch = xQueueCreate(5, sizeof(slg_hk_pkt*));
-    i2cRxQueue = xQueueCreate(5, sizeof(uint8_t*));
+    i2cRxQueue = xQueueCreate(10, sizeof(uint8_t*));
     if(xTaskCreate(SLG_I2C_RX, "SLG_RX", 4096 / sizeof( portSTACK_TYPE ), 0, TASK_PRIORITY_SLG_I2C_RX, &xTaskHandle_SLG_I2C_RX) != pdTRUE)
         printf("Fail to create SLG I2C RX task!\r\n");
 //    if(xTaskCreate(SLG_Data_Receiving, "SLG_DATA", 4096 / sizeof( portSTACK_TYPE ), 0, TASK_PRIORITY_SLG_RECEIVING, &xTaskHandle_SLG_RECEIVING) != pdTRUE)
