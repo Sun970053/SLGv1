@@ -15,12 +15,18 @@
 #include <string.h>
 
 #include "stm32f4xx_hal.h"
+
+#include "fatfs.h"
+#include "fatfs_sd.h"
+
 #include "csp/csp.h"
+#include "csp/csp_id.h"
 #include "csp/csp_types.h"
 #include "csp/csp_endian.h"
 #include "csp/csp_error.h"
 #include "csp/interfaces/csp_if_i2c.h"
 #include "csp/csp_types.h"
+
 
 
 #define SLG_PACKET_MAX  40000
@@ -36,27 +42,41 @@
 
 #define CMD_FAIL						0
 
+/*
+ * Command Codes: The value is calculated from hash table.
+ *  */
+#define CMD_SLG_PORT_PING                    31
+#define CMD_SLG_PORT_START                   32
+#define CMD_SLG_PORT_STOP                    33
+#define CMD_SLG_SYNC                         51
+#define CMD_SLG_PRINT                        52
+#define CMD_PARAM_SLG_PARAMS                 35
+#define CMD_PARAM_SLG_REGIONAL_PARAMS        36
+#define CMD_PARAM_SLG_WHITELIST              40
+#define CMD_SLG_PRINT_HOUSEKEEPING_A         47
+#define CMD_SLG_PRINT_HOUSEKEEPING_B         48
+#define CMD_SLG_FORWARD_ON                   49
+#define CMD_SLG_FORWARD_OFF                  50
+
 /* The CSP ports that are configured on the SLG and its associated functions. */
-#define SLG_PORT_PING 					1
-#define SLG_PORT_START 					2
-#define SLG_PORT_STOP 					3
-#define SLG_PORT_TRANSMIT 				4
-#define SLG_PORT_SYNC_PARAMS 			5
-#define SLG_PORT_SYNC_REGIONAL_PARAMS 	6
-#define SLG_PORT_SYNC_TX_PARAMS 		7
-#define SLG_PORT_SYNC_TX_A 				8
-#define SLG_PORT_SYNC_TX_B 				9
-#define SLG_PORT_SYNC_WHITELIST 		10
-#define SLG_PORT_PRINT_PARAMS 			11
-#define SLG_PORT_PRINT_REGIONAL_PARAMS 	12
-#define SLG_PORT_PRINT_TX_PARAMS 		13
-#define SLG_PORT_PRINT_TX_A 			14
-#define SLG_PORT_PRINT_TX_B 			15
-#define SLG_PORT_PRINT_WHITELIST 		16
-#define SLG_PORT_PRINT_HOUSEKEEPING_A 	17
-#define SLG_PORT_PRINT_HOUSEKEEPING_B 	18
-#define SLG_FORWARD_ON					19
-#define SLG_FORWARD_OFF					20
+#define SLG_PORT_PING                   1
+#define SLG_PORT_START                  2
+#define SLG_PORT_STOP                   3
+#define SLG_PORT_TRANSMIT               4
+#define SLG_PORT_SYNC_PARAMS            5
+#define SLG_PORT_SYNC_REGIONAL_PARAMS   6
+#define SLG_PORT_SYNC_TX_PARAMS         7
+#define SLG_PORT_SYNC_TX_A              8
+#define SLG_PORT_SYNC_TX_B              9
+#define SLG_PORT_SYNC_WHITELIST         10
+#define SLG_PORT_PRINT_PARAMS           11
+#define SLG_PORT_PRINT_REGIONAL_PARAMS  12
+#define SLG_PORT_PRINT_TX_PARAMS        13
+#define SLG_PORT_PRINT_TX_A             14
+#define SLG_PORT_PRINT_TX_B             15
+#define SLG_PORT_PRINT_WHITELIST        16
+#define SLG_PORT_PRINT_HOUSEKEEPING_A   17
+#define SLG_PORT_PRINT_HOUSEKEEPING_B   18
 
 /* SLG will send LoRa data packets in 2 segments to 2 different ports,
  * expecting that the OBC to assemble the data to form a complete packet */
@@ -97,7 +117,7 @@
 
 #define TASK_PRIORITY_SLG_RECEIVING 	1
 #define TASK_PRIORITY_SLG_FORWARD		1
-
+#define TASK_PRIORITY_NO_FORWARD        1
 
 
 /* SLG Parameters */
@@ -288,10 +308,18 @@ slg_tx_param_t init_slg_tx_param(void);
 slg_whitelist_t init_slg_whitelist(void);
 
 /* SLG interaction command line */
-int cmd_slg_handle(int);
+int cmd_slg_handle(int param, char* param2);
 
+/* Collection the slg payload. This task is deprecated  */
 void vTask_SLG_Data_Collection(void* pvParameter);
 
-void vTask_SLG_Forward(void * pvParameters);
+/* Continuously receive the slg data.
+ * Once it receive the data in correct frequency,
+ * it will store the necessary information in SD card. */
+void vTask_SLG_Forward(void* pvParameters);
+
+/* If stm32 doesn't receive the data excess the certain time,
+ * It will send a reception failure message to the sd card. */
+void vTask_No_Forward(void* pvParameters);
 
 #endif /* INC_SLG_TASK_H_ */

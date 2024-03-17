@@ -9,17 +9,33 @@
 
 #define INFO_PRINTF	1
 
+//-----STM32------
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+
+//-----FREERTOS-----
 extern TaskHandle_t xTaskHandle_SLG_RECEIVING;
 extern QueueHandle_t slg_sfch;
 
+//-----RTC-----
+extern void get_Date_Time(void);
+extern RTC_TimeTypeDef gTime;
+
+//-----CSP-----
 volatile uint8_t status = SLG_HK_Rec_None;
+volatile int id = 0;
 volatile int fhandle = 0xFF;
 csp_socket_t sock = {0};
 csp_conn_t *conn;
 
+//-----SD CARD-----
+extern FIL file; // file
+extern FRESULT fresult; // to store the result
+extern uint8_t timer2Flag;
+extern uint8_t timer3Flag;
+
 void vTask_SLG_Data_Collection(void * pvParameters)
 {
-	int cspret;
 	int filenum = 0;
 	status = SLG_HK_Rec_None;
 	volatile uint32_t exectime = *((uint32_t*)pvParameters);
@@ -132,7 +148,7 @@ void vTask_SLG_Data_Collection(void * pvParameters)
 	#ifdef INFO_PRINTF
     printf("[SLG] LoRa packet receive task off\r\n");
 	#endif
-    cspret = csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
+    csp_transaction(CSP_PRIO_NORM, CSP_SLG_ADD, SLG_PORT_STOP, SLG_TIMEOUT, NULL, 0, NULL, 0);
     xTaskHandle_SLG_RECEIVING = NULL;
     vTaskDelete(0);
 }
@@ -150,6 +166,8 @@ void vTask_SLG_Forward(void * pvParameters)
     slg_hk_a_s slg_hk_a;
     slg_hk_b_s slg_hk_b;
     slg_hk_pkt slg_pkt;
+    char* filename = (char*)pvParameters;
+    uint8_t bFlag = 0;
 
     while(1)
     {
@@ -219,6 +237,8 @@ void vTask_SLG_Forward(void * pvParameters)
 					#endif
                     csp_buffer_free(packet);
                     status |= SLG_HK_Rec_B;
+                    // enter file operation section
+                    bFlag = 1;
                     break;
 			}
 		}
@@ -257,8 +277,89 @@ void vTask_SLG_Forward(void * pvParameters)
         }
 		/* Close current connection */
         csp_close(conn);
+
+        /* Store experiment results in SD card file. */
+        if(slg_pkt.freq_hz == 923400000 && bFlag == 1)
+        {
+        	uint8_t buff[100] = {0};
+        	/* Refresh Timer2 Interrupt */
+			htim2.Instance->CNT &= 0x0;
+			HAL_TIM_Base_Start_IT(&htim2);
+			/* Stop Timer3 Interrupt */
+			htim3.Instance->CNT &= 0x0;
+			HAL_TIM_Base_Stop_IT(&htim3);
+
+			/* Update time */
+			get_Date_Time();
+			/* id, status, mm:ss.ooo */
+			int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
+			float rssi = (float)slg_pkt.rssi/10;
+			float snr = (float)slg_pkt.snr/10;
+			if(milisec >= 1000) milisec = 999;
+			sprintf((char*)buff, "%d,%d,%02d:%02d.%03d,%.2f,%.2f\n", id++, slg_pkt.crc, gTime.Minutes, gTime.Seconds, milisec, rssi, snr);
+			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			/* Updating an existing file */
+			fresult = f_open(&file, (char*)filename, FA_OPEN_ALWAYS | FA_WRITE);
+			if(fresult == FR_OK) printf("%s opened successfully !\r\n", filename);
+			else printf("Fail to open %s !\r\n", filename);
+			/* Move to offset to the end to the file */
+			fresult = f_lseek(&file, f_size(&file));
+			if(fresult == FR_OK) printf("Seek file !\r\n");
+			/* Writing text */
+			fresult = f_puts((char*)buff, &file);
+			if(fresult == FR_OK) printf("Write file !\r\n");
+			/* Close file */
+			f_close(&file);
+			if(fresult == FR_OK) printf("Close file !\r\n");
+			bFlag = 0;
+        }
+        else
+        {
+        	printf("Frequency: %d Hz, Flag: %d. It doesn't meet the requirements ! \r\n", (int)slg_pkt.freq_hz, bFlag);
+        }
     }
 }
 
+void vTask_No_Forward(void* pvParameters)
+{
+	char* filename = (char*)pvParameters;
+	while(1)
+	{
+		/* If it exceeded threshold, triggering Timer interrupt */
+		if(timer2Flag | timer3Flag)
+		{
+			uint8_t buff[100] = {0};
+			/* Receive data fail */
+			/* Update time */
+			get_Date_Time();
+			printf("Rx didn't receive the predicted signal !\r\n");
+			/* id, status, mm:ss.ooo */
+			int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
+			if(milisec >= 1000) milisec = 999;
+			sprintf((char*)buff, "%d,%d,%02d:%02d.%03d\n", id++, -1, gTime.Minutes, gTime.Seconds, milisec);
+			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			/* Updating an existing file */
+			fresult = f_open(&file, (char*)filename, FA_OPEN_ALWAYS | FA_WRITE);
+			if(fresult == FR_OK) printf("%s opened successfully !\r\n", filename);
+			else printf("Fail to open %s !\r\n", filename);
+			/* Move to offset to the end to the file */
+			fresult = f_lseek(&file, f_size(&file));
+			if(fresult == FR_OK) printf("Seek file !\r\n");
+			/* Writing text */
+			fresult = f_puts((char*)buff, &file);
+			if(fresult == FR_OK) printf("Write file !\r\n");
+			/* Close file */
+			fresult = f_close(&file);
+			if(fresult == FR_OK) printf("Close file !\r\n");
+
+			timer2Flag = 0;
+			HAL_TIM_Base_Stop_IT(&htim2);
+			timer3Flag = 0;
+
+			htim3.Instance->CNT &= 0x0;
+			HAL_TIM_Base_Start_IT(&htim3);
+		}
+	}
+}
 
 
