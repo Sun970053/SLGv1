@@ -20,9 +20,6 @@ QueueHandle_t i2cRxQueue;
 QueueHandle_t slg_sfch;
 csp_i2c_interface_data_t ifdata1;
 
-extern void get_Date_Time(void);
-extern RTC_TimeTypeDef gTime;
-
 //uint8_t new_data[SLAVE_RX_BUFFER_SIZE];
 /** Interface definition */
 csp_iface_t csp_if_i2c =
@@ -140,10 +137,6 @@ void SLG_I2C_RX(void* pvParameter)
         {
     		HAL_NVIC_DisableIRQ(I2C1_EV_IRQn);
     		HAL_NVIC_DisableIRQ(I2C1_ER_IRQn);
-    		get_Date_Time();
-    		int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
-
-			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
             csp_id_setup_rx(packet);
             packet->frame_length = rxcount;
             memcpy(packet->frame_begin, &isr_rxData[0], packet->frame_length);

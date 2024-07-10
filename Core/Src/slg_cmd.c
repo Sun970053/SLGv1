@@ -31,6 +31,7 @@ extern uint8_t cr_setting;
 
 /* -----RTC----- */
 extern void init_Date_Time(void);
+extern void init_DS1307_Date_Time(void);
 
 /* Initialize SLG parameters. */
 /* The default parameters loaded onto SLG upon bootup are also listed */
@@ -443,6 +444,8 @@ int cmd_slg_handle(int param, char* param2)
 					HAL_TIM_Base_Start_IT(&htim2);
 					/* initialize RTC to 00:00 */
 					init_Date_Time();
+					/* initialize DS1307 to 00:00 */
+					init_DS1307_Date_Time();
 					/* According to the parameter, define counter period value (AutoReload Register). */
 					uint8_t row, col; // row: cr, column: sf
 					row = cr_setting - 1;

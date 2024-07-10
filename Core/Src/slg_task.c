@@ -19,7 +19,9 @@ extern QueueHandle_t slg_sfch;
 
 //-----RTC-----
 extern void get_Date_Time(void);
+extern void get_DS1307_Date_Time(void);
 extern RTC_TimeTypeDef gTime;
+extern RTC_time_t myTime;
 
 //-----CSP-----
 volatile uint8_t status = SLG_HK_Rec_None;
@@ -289,15 +291,18 @@ void vTask_SLG_Forward(void * pvParameters)
 			htim3.Instance->CNT &= 0x0;
 			HAL_TIM_Base_Stop_IT(&htim3);
 
-			/* Update time */
+			/* Update STM32 RTC time */
 			get_Date_Time();
+			/* Update DS1307 RTC time */
+			get_DS1307_Date_Time();
 			/* id, status, mm:ss.ooo */
 			int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
 			float rssi = (float)slg_pkt.rssi/10;
 			float snr = (float)slg_pkt.snr/10;
 			if(milisec >= 1000) milisec = 999;
-			sprintf((char*)buff, "%d,%d,%02d:%02d.%03d,%.2f,%.2f\n", id++, slg_pkt.crc, gTime.Minutes, gTime.Seconds, milisec, rssi, snr);
-			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			sprintf((char*)buff, "%d,%d,%02d:%02d,%.2f,%.2f\n", id++, slg_pkt.crc, myTime.minutes, myTime.seconds, rssi, snr);
+			printf("Current STM32 RTC time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			printf("Current DS1307 RTC time: %02d:%02d \r\n", myTime.minutes, myTime.seconds);
 			/* Updating an existing file */
 			fresult = f_open(&file, (char*)filename, FA_OPEN_ALWAYS | FA_WRITE);
 			if(fresult == FR_OK) printf("%s opened successfully !\r\n", filename);
@@ -330,14 +335,18 @@ void vTask_No_Forward(void* pvParameters)
 		{
 			uint8_t buff[100] = {0};
 			/* Receive data fail */
-			/* Update time */
+			/* Update STM32 RTC time */
 			get_Date_Time();
+			/* Update DS1307 RTC time */
+			get_DS1307_Date_Time();
+
 			printf("Rx didn't receive the predicted signal !\r\n");
 			/* id, status, mm:ss.ooo */
 			int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
 			if(milisec >= 1000) milisec = 999;
-			sprintf((char*)buff, "%d,%d,%02d:%02d.%03d\n", id++, -1, gTime.Minutes, gTime.Seconds, milisec);
-			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			sprintf((char*)buff, "%d,%d,%02d:%02d\n", id++, -1, myTime.minutes, myTime.seconds);
+			printf("Current STM32 RTC time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			printf("Current DS1307 RTC time: %02d:%02d \r\n", myTime.minutes, myTime.seconds);
 			/* Updating an existing file */
 			fresult = f_open(&file, (char*)filename, FA_OPEN_ALWAYS | FA_WRITE);
 			if(fresult == FR_OK) printf("%s opened successfully !\r\n", filename);

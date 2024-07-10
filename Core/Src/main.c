@@ -85,6 +85,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 RTC_HandleTypeDef hrtc;
 
@@ -147,6 +148,9 @@ uint8_t timer3Flag = 0;
 RTC_DateTypeDef gDate;
 RTC_TimeTypeDef gTime;
 
+RTC_time_t myTime;
+RTC_date_t myDate;
+
 /* -----LORA----- */
 /* sf_10_cr45: 2500 ms
  * sf_9_cr45: 2247 ms
@@ -156,10 +160,10 @@ RTC_TimeTypeDef gTime;
  * sf_9_cr48: 2298 ms
  * sf_8_cr48: 2163 ms
  * sf_7_cr48: 2090 ms */
-uint32_t cr_sf_array[4][4] = {{2070, 2134, 2247, 2500},
-							{2077, 2143, 2264, 2530},
-							{2083, 2153, 2281, 2561},
-							{2090, 2163, 2298, 2592}};
+uint32_t cr_sf_array[4][6] = {{2070, 2134, 2247, 2500, 2986, 3974},
+							{2077, 2143, 2264, 2530, 3040, 4172},
+							{2083, 2153, 2281, 2561, 3095, 4269},
+							{2090, 2163, 2298, 2592, 3150, 4367}};
 uint8_t sf_setting = 10;
 uint8_t cr_setting = 1;
 //extern uint8_t isr_rxData[SLAVE_RX_BUFFER_SIZE];
@@ -175,6 +179,7 @@ static void MX_SPI1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C2_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -200,6 +205,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void init_DS1307_Date_Time(void);
+void get_DS1307_Date_Time(void);
 void init_Date_Time(void);
 void get_Date_Time(void);
 void clearRxCmd(rxCmd* myRxCmd);
@@ -233,11 +240,21 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
 
 void rtcTask(void* pvParameter)
 {
+	/* initialize RTC to 00:00 */
+	init_Date_Time();
+	/* initialize DS1307 to 00:00 */
+	init_DS1307_Date_Time();
 	while(1)
 	{
 		get_Date_Time();
+		get_DS1307_Date_Time();
+		printf("--------------\r\n");
+		printf("STM32 RTC: \r\n");
 		printf("%02d-%02d-%04d\r\n", gDate.Date, gDate.Month, 2000 + gDate.Year);
 		printf("%02d:%02d:%02d\r\n", gTime.Hours, gTime.Minutes, gTime.Seconds);
+		printf("DS1307 RTC: \r\n");
+		printf("%02d-%02d-%04d\r\n", myDate.date, myDate.month, 2000 + myDate.year);
+		printf("%02d:%02d:%02d\r\n", myTime.hours, myTime.minutes, myTime.seconds);
 		vTaskDelay(5000);
 	}
 }
@@ -246,8 +263,10 @@ void timerTask(void* pvParameter)
 {
 	/* initialize RTC to 00:00 */
 	init_Date_Time();
-	/* Auto Reload */
-	htim2.Instance->ARR = *(int*)pvParameter * 10 - 1;
+	/* initialize DS1307 to 00:00 */
+	init_DS1307_Date_Time();
+	/* Auto Reload (millisecond) */
+	htim2.Instance->ARR = *(int*)pvParameter * 1000 - 1;
 	printf("Timer testing task start.. \r\n");
 	HAL_TIM_Base_Start_IT(&htim2);
 	while(1)
@@ -255,9 +274,12 @@ void timerTask(void* pvParameter)
 		if(timer2Flag == 1)
 		{
 			get_Date_Time();
+			get_DS1307_Date_Time();
 			int milisec = (1.0f - (float)gTime.SubSeconds / (float)gTime.SecondFraction) * 1000;
 			if(milisec >= 1000) milisec = 999;
-			printf("Current time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			printf("--------------\r\n");
+			printf("Current STM32 RTC time: %02d:%02d.%03d \r\n", gTime.Minutes, gTime.Seconds, milisec);
+			printf("Current DS1307 RTC time: %02d:%02d\r\n", myTime.minutes, myTime.seconds);
 			htim2.Instance->CNT &= 0x0;
 			timer2Flag = 0;
 		}
@@ -624,6 +646,12 @@ void processCmdTask(void* pvParameter)
 					}
 					else
 						printf("Parameter is out of range ! \r\n");
+					if(sf > 10)
+					{
+						htim2.Instance->ARR = 5000000-1;
+					}
+					else
+						htim2.Instance->ARR = 3000000-1;
 				}
 				else if(paramCode == SLG_CR)
 				{
@@ -670,7 +698,7 @@ void processCmdTask(void* pvParameter)
 						printf("Timer testing task isn't exist !\r\n");
 					}
 					htim2.Instance->CNT &= 0x0;
-					HAL_TIM_Base_Stop_IT(&htim3);
+					HAL_TIM_Base_Stop_IT(&htim2);
 				}
 				else
 				{
@@ -725,6 +753,7 @@ int main(void)
   MX_RTC_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
   //create cmd queue
   rxCmdQueue = xQueueCreate(10, sizeof(char));
@@ -733,6 +762,12 @@ int main(void)
   initHashTable();
   SD_init();
   csp_start();
+
+  if(ds1307_init(&hi2c2))
+  {
+	  printf("DS1307 initialization .. fail !\r\n");
+  }
+
   xTaskCreate(processCmdTask, "PROCESS", 4096*3, (void*)NULL, 3, &processCmdTaskHandler);
   xTaskCreate(rxCmdTask, "RX", 512, (void*)NULL, 3, &rxCmdTaskHandler);
   xTaskCreate(rtcTask, "RTC", 512, (void*)NULL, 1, &rtcTaskHandler);
@@ -769,9 +804,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
@@ -829,6 +864,40 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.ClockSpeed = 100000;
+  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
@@ -1068,11 +1137,11 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
@@ -1109,15 +1178,39 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void init_DS1307_Date_Time(void)
+{
+	myTime.hours = 0x14;
+	myTime.minutes = 0x00;
+	myTime.seconds = 0x00;
+	myDate.date = 0x18;
+	myDate.day = MONDAY;
+	myDate.month = 0x03;
+	myDate.year = 0x24;
+	/* Set the DS1307 current Time */
+	ds1307_set_current_time(&myTime);
+	/* Set the DS1307 current Date */
+	ds1307_set_current_date(&myDate);
+
+}
+void get_DS1307_Date_Time(void)
+{
+	/* Get the DS1307 current Time */
+	ds1307_get_current_time(&myTime);
+	/* Get the DS1307 current Date */
+	ds1307_get_current_date(&myDate);
+}
+
 void init_Date_Time()
 {
 	gTime.Hours = 0x14;
 	gTime.Minutes = 0x00;
 	gTime.Seconds = 0x00;
 	gDate.Date = 0x26;
-	/* Get the RTC current Time */
+	/* Set the RTC current Time */
 	HAL_RTC_SetTime(&hrtc, &gTime, RTC_FORMAT_BIN);
-	/* Get the RTC current Date */
+	/* Set the RTC current Date */
 	HAL_RTC_SetDate(&hrtc, &gDate, RTC_FORMAT_BIN);
 }
 
